@@ -15,10 +15,18 @@ pluggable backends. Every translation gets one of three statuses:
 
 A trustworthy partial result beats a wrong complete one.
 
+**Parsing migration first; integrate with, don't duplicate, rule converters.** Rosettalog's
+focus is migrating *parsing logic* (log source extensions and field extraction), with honest
+findings and field-level verification against sample logs. Existing open-source projects already
+handle rule and query translation (for example Uncoder.io, pySigma and ARuleCon). Rosettalog
+integrates with them instead of competing: AQL queries go to an external translator whose gaps
+are recorded as findings, and QRadar rules are exported to Sigma so that pySigma converts them
+to target queries.
+
 > Status: **alpha** (milestone M1). Supported today: QRadar **Log Source Extensions** →
 > **Microsoft Sentinel** (KQL parser functions, ASIM field names) and **Splunk**
-> (props.conf / transforms.conf, CIM field names). AQL, rules and more targets are on the
-> [roadmap](#roadmap).
+> (props.conf / transforms.conf, CIM field names). Integration with rule and query converters
+> is on the [roadmap](#roadmap).
 
 ## Quickstart
 
@@ -37,7 +45,7 @@ uv run rosettalog convert examples/acme_firewall/acme_fw.lsx.xml \
 ```
 acme_fw.lsx
   sentinel   PARTIAL     8 item(s) need review, samples 2/4
-  splunk     PARTIAL     1 item(s) need review, samples 4/4
+  splunk     PARTIAL     2 item(s) need review, samples 4/4
 ```
 
 `out/` now contains:
@@ -60,6 +68,7 @@ Splunk.
 ```bash
 rosettalog convert my_extensions/ --to sentinel --source-table MyDevice_CL --message-column RawData
 rosettalog verify my_lsx.xml --samples my_samples.yaml --to splunk   # exit 2 on any mismatch
+rosettalog verify ... --require-ground-truth   # every sample needs full `expected` + source
 rosettalog inspect my_lsx.xml      # dump the vendor-neutral IR
 rosettalog plugins                 # installed sources/targets and their -O options
 rosettalog convert ... --strict    # exit 2 unless everything is FULL (useful in CI)
@@ -83,8 +92,15 @@ QRadar LSX ─► frontend ─► IR + findings ─► backend ─► target con
   that differs between them is reported. See the
   [support matrix](docs/lsx-support-matrix.md).
 - **Verification.** Emulators run the *generated* KQL (on real RE2) and the *generated* .conf
-  files on your samples, and compare the results field by field with the QRadar semantics. See
+  files on your samples, and compare the results field by field with the QRadar semantics and
+  with your `expected` values. Each sample records its `ground_truth_source` ("observed on
+  QRadar", "derived from IBM docs" or "assumed"), and the report shows it. See
   [docs/verification.md](docs/verification.md).
+- **Assumptions are testable.** Where IBM's documentation is ambiguous, Rosettalog states its
+  assumption, and [`examples/confirmation/`](examples/confirmation/README.md) provides a minimal
+  LSX plus sample logs for each one, ready to load into QRadar CE.
+- **Deployment scope.** Splunk index-time settings (they affect only newly indexed data) are
+  separated from search-time extractions in both the generated props.conf and the report.
 - **Architecture.** Frontends and backends are plugins discovered through entry points, so
   adding a SIEM never touches the core. See [docs/architecture.md](docs/architecture.md).
 
@@ -94,8 +110,8 @@ QRadar LSX ─► frontend ─► IR + findings ─► backend ─► target con
 |---|---|
 | M0 ✅ | Scaffolding, IR, plugin system, report, CI |
 | M1 ✅ | LSX → Sentinel KQL + Splunk props/transforms, report, verification harness |
-| M2 | A practical AQL subset → KQL + SPL |
-| M3 | QRadar custom rules and building blocks → Sigma, plus KQL/SPL |
+| M2 | AQL: a documented integration point plus an optional adapter that hands queries to an external translator (e.g. Uncoder) and records its output and gaps as findings. No AQL grammar of our own. |
+| M3 | QRadar custom rules and building blocks → IR detection model → **Sigma** only; target conversion is delegated to pySigma |
 | M4 | Elastic ingest pipelines; opt-in verification against real Splunk / ADX |
 | M5 | Cortex XSIAM (XQL parsing rules) |
 

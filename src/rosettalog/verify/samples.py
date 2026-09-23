@@ -18,6 +18,9 @@ class Sample(BaseModel):
     log: str
     expected: dict[str, str | None] | None = None
     """Optional expected values by canonical field name; ``null`` means "no value"."""
+    ground_truth_source: str | None = None
+    """Where ``expected`` comes from, e.g. "observed on QRadar CE 7.5", "derived from IBM docs",
+    or "assumed". Free text; shown in the report next to every comparison."""
 
 
 class SampleSet(BaseModel):
@@ -29,6 +32,30 @@ class SampleSet(BaseModel):
 
     def label(self, index: int) -> str:
         return self.samples[index].name or f"sample {index + 1}"
+
+
+def ground_truth_problems(sample_set: SampleSet, fields: list[str] | None = None) -> list[str]:
+    """Problems that prevent a sample set from serving as ground truth.
+
+    Every sample needs ``expected`` and ``ground_truth_source``. If ``fields`` is given (the
+    canonical fields a parser produces), ``expected`` must list each of them (``null`` = no value)
+    and must not name fields the parser does not produce.
+    """
+    problems: list[str] = []
+    for index, sample in enumerate(sample_set.samples):
+        label = sample_set.label(index)
+        if not sample.expected:
+            problems.append(f"{label}: 'expected' is missing or empty")
+        if not (sample.ground_truth_source or "").strip():
+            problems.append(f"{label}: 'ground_truth_source' is missing")
+        if fields is not None and sample.expected:
+            missing = [f for f in fields if f not in sample.expected]
+            unknown = [f for f in sample.expected if f not in fields]
+            if missing:
+                problems.append(f"{label}: 'expected' does not cover {', '.join(missing)}")
+            if unknown:
+                problems.append(f"{label}: 'expected' names unknown field(s) {', '.join(unknown)}")
+    return problems
 
 
 def load_samples(path: Path) -> SampleSet:

@@ -1,0 +1,18 @@
+# Confirmation case 04: event-match-single precedence over an EventCategory matcher.
+# `expected` encodes Rosettalog's CURRENT ASSUMPTION. After observing QRadar CE,
+# record the observed values here and set ground_truth_source to e.g.
+# "observed on QRadar CE 7.5". Do not change the frontend until results are in.
+reference_time: '2026-06-01T00:00:00Z'
+samples:
+- name: line 1
+  log: '<13>Mar 24 10:00:00 rl-confirm-04 rltest: id=100 cat=raw'
+  ground_truth_source: 'derived from IBM docs (EventCategory: ''for any event with a category not handled by an event-match-single entity''); to be confirmed on QRadar CE'
+  expected:
+    EventName: '100'
+    EventCategory: SingleCat
+- name: line 2
+  log: '<13>Mar 24 10:00:00 rl-confirm-04 rltest: id=200 cat=raw'
+  ground_truth_source: 'derived from IBM docs (EventCategory: ''for any event with a category not handled by an event-match-single entity''); to be confirmed on QRadar CE'
+  expected:
+    EventName: '200'
+    EventCategory: raw

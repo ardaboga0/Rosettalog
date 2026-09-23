@@ -7,6 +7,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, computed_field
 
 from rosettalog.ir import Finding, Status
+from rosettalog.plugins import DeploymentSetting
 from rosettalog.verify.harness import VerificationResult
 
 REPORT_SCHEMA_VERSION = "1"
@@ -18,6 +19,7 @@ class TargetReport(BaseModel):
     findings: list[Finding] = Field(default_factory=list)
     files: list[str] = Field(default_factory=list)
     field_names: dict[str, str] = Field(default_factory=dict)
+    settings: list[DeploymentSetting] = Field(default_factory=list)
     verification: VerificationResult | None = None
 
 

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Rosettalog confirmation case: two-digit year pivot. Synthetic; see ../README.md. -->
+<device-extension xmlns="event_parsing/device_extension">
+  <pattern id="Evt" xmlns=""><![CDATA[evt=(\w+)]]></pattern>
+  <pattern id="D" xmlns=""><![CDATA[d=(\d{2}/\d{2}/\d{2} \d{2}:\d{2})]]></pattern>
+  <match-group order="1" description="only group" xmlns="">
+    <matcher field="EventName" order="1" pattern-id="Evt" capture-group="1"/>
+    <matcher field="DeviceTime" order="1" pattern-id="D" capture-group="1" ext-data="dd/MM/yy HH:mm"/>
+  </match-group>
+</device-extension>

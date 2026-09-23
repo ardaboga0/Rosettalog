@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Rosettalog confirmation case: event-match-single precedence over an EventCategory matcher. Synthetic; see ../README.md. -->
+<device-extension xmlns="event_parsing/device_extension">
+  <pattern id="Id" xmlns=""><![CDATA[id=(\w+)]]></pattern>
+  <pattern id="Cat" xmlns=""><![CDATA[cat=(\w+)]]></pattern>
+  <match-group order="1" description="only group" xmlns="">
+    <matcher field="EventName" order="1" pattern-id="Id" capture-group="1"/>
+    <matcher field="EventCategory" order="1" pattern-id="Cat" capture-group="1"/>
+    <event-match-single event-name="100" device-event-category="SingleCat"/>
+  </match-group>
+</device-extension>

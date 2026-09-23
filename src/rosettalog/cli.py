@@ -49,6 +49,14 @@ AsimSchema = Annotated[
     str | None, typer.Option(help="Sentinel: ASIM schema to align to, e.g. NetworkSession.")
 ]
 Sourcetype = Annotated[str | None, typer.Option(help="Splunk: sourcetype stanza name.")]
+RequireGroundTruth = Annotated[
+    bool,
+    typer.Option(
+        "--require-ground-truth",
+        help="Fail unless every sample has 'expected' values for all fields and a "
+        "'ground_truth_source'.",
+    ),
+]
 SamplesOpt = Annotated[
     Path | None, typer.Option("--samples", "-s", help="Samples YAML for verification.")
 ]
@@ -139,6 +147,7 @@ def convert(
     asim_schema: AsimSchema = None,
     sourcetype: Sourcetype = None,
     samples: SamplesOpt = None,
+    require_ground_truth: RequireGroundTruth = False,
     strict: Annotated[
         bool, typer.Option(help="Exit with code 2 unless every translation is FULL.")
     ] = False,
@@ -162,6 +171,7 @@ def convert(
             options=opts,
             out_dir=output,
             samples=sample_set,
+            require_ground_truth=require_ground_truth,
             inputs=[str(p) for p in inputs],
         )
     except RosettalogError as exc:
@@ -185,6 +195,7 @@ def verify(
     message_column: MessageColumn = None,
     asim_schema: AsimSchema = None,
     sourcetype: Sourcetype = None,
+    require_ground_truth: RequireGroundTruth = False,
     report_md: Annotated[
         Path | None, typer.Option("--report", help="Also write a Markdown report here.")
     ] = None,
@@ -204,6 +215,7 @@ def verify(
             to,
             options=opts,
             samples=load_samples(samples),
+            require_ground_truth=require_ground_truth,
             inputs=[str(p) for p in inputs],
         )
     except RosettalogError as exc:
@@ -217,7 +229,11 @@ def verify(
                 typer.echo(f"{artifact.name} -> {tr.target}: not verified (no output)")
                 failed = True
                 continue
-            typer.echo(f"{artifact.name} -> {tr.target}: {v.passed}/{v.total} samples match")
+            truth = ", ".join(f"{k}: {n}" for k, n in v.ground_truth.items())
+            typer.echo(
+                f"{artifact.name} -> {tr.target}: {v.passed}/{v.total} samples match "
+                f"(ground truth: {truth})"
+            )
             if v.error:
                 typer.secho(f"  emulation error: {v.error}", fg=typer.colors.RED)
                 failed = True

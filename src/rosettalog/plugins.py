@@ -18,7 +18,7 @@ from datetime import datetime
 from functools import cache
 from importlib.metadata import entry_points
 from pathlib import Path
-from typing import ClassVar, Protocol, runtime_checkable
+from typing import ClassVar, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -38,6 +38,27 @@ class GeneratedFile(BaseModel):
     content: str
 
 
+Scope = Literal["index-time", "search-time", "query-time"]
+
+
+class DeploymentSetting(BaseModel):
+    """One generated setting and *when* it takes effect in the target SIEM.
+
+    * ``index-time``: applied while data is ingested; affects only data indexed after deployment.
+    * ``search-time``: applied when searching; affects all data, including already indexed events.
+    * ``query-time``: a saved query/function; applies to all data it is run against.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    scope: Scope
+    file: str
+    setting: str
+    fields: list[str] = Field(default_factory=list)
+    """Generated field names that depend on this setting."""
+    note: str = ""
+
+
 class BackendResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -49,6 +70,8 @@ class BackendResult(BaseModel):
     """Canonical field -> field name in the generated content (only fields actually emitted)."""
     options: dict[str, str] = Field(default_factory=dict)
     """Effective backend options, so emulators can interpret the output the same way."""
+    settings: list[DeploymentSetting] = Field(default_factory=list)
+    """Where and when each generated setting takes effect (see :class:`DeploymentSetting`)."""
 
     @property
     def produced_output(self) -> bool:

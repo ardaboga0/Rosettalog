@@ -20,6 +20,7 @@ def test_convert_writes_outputs_and_reports(tmp_path: Path) -> None:
         [
             "convert", str(ACME / "acme_fw.lsx.xml"), "--to", "sentinel", "--to", "splunk",
             "--sourcetype", "acme:firewall", "-s", str(ACME / "samples.yaml"), "-o", str(out),
+            "--require-ground-truth",
         ],
     )  # fmt: skip
     assert result.exit_code == 0, result.output
@@ -33,6 +34,9 @@ def test_convert_writes_outputs_and_reports(tmp_path: Path) -> None:
     md = (out / "report.md").read_text()
     assert "RE2_NO_LOOKAROUND" in md
     assert "2/4 samples" in md
+    assert "Index-time settings: take effect only for data indexed **after** deployment" in md
+    assert "Search-time extractions" in md
+    assert "Ground truth of the samples: assumed" in md
 
 
 def test_strict_mode_fails_on_partial(tmp_path: Path) -> None:
@@ -132,3 +136,23 @@ def test_inspect_plugins_schema() -> None:
     assert "splunk" in plugins.output
     schema = runner.invoke(app, ["schema"])
     assert json.loads(schema.output)["title"] == "MigrationReport"
+
+
+def test_require_ground_truth_rejects_incomplete_samples(tmp_path: Path) -> None:
+    samples = tmp_path / "s.yaml"
+    samples.write_text("samples:\n  - log: 'action=deny'\n    expected: {EventName: deny}\n")
+    result = runner.invoke(
+        app,
+        [
+            "verify",
+            str(ACME / "acme_fw.lsx.xml"),
+            "-s",
+            str(samples),
+            "--to",
+            "splunk",
+            "--require-ground-truth",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "ground_truth_source' is missing" in result.output
+    assert "does not cover" in result.output

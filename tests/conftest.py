@@ -31,6 +31,26 @@ def parse_lsx(path: Path) -> Artifact:
     return LsxParser(path).parse()
 
 
+def sample_sets() -> list[tuple[Path, Path]]:
+    """Every samples file shipped in examples/ or tests/, paired with the LSX it verifies.
+
+    Pairing rule: ``X.samples.yaml`` -> ``X.lsx.xml``; ``samples.yaml`` -> the only ``*.xml``
+    in the same directory. A samples file that cannot be paired is an error.
+    """
+    pairs = []
+    for base in (EXAMPLES, ROOT / "tests"):
+        for path in sorted(base.rglob("*.yaml")):
+            if path.name == "samples.yaml":
+                xmls = sorted(path.parent.glob("*.xml"))
+                assert len(xmls) == 1, f"{path}: expected exactly one *.xml next to it"
+                pairs.append((path, xmls[0]))
+            elif path.name.endswith(".samples.yaml"):
+                lsx = path.with_name(path.name.removesuffix(".samples.yaml") + ".lsx.xml")
+                assert lsx.exists(), f"{path}: missing {lsx.name}"
+                pairs.append((path, lsx))
+    return pairs
+
+
 LSX_HEADER = '<?xml version="1.0"?>\n<device-extension xmlns="event_parsing/device_extension">\n'
 
 

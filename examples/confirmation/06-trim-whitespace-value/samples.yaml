@@ -1,0 +1,12 @@
+# Confirmation case 06: trim-whitespace and surrounding whitespace in the captured value.
+# `expected` encodes Rosettalog's CURRENT ASSUMPTION. After observing QRadar CE,
+# record the observed values here and set ground_truth_source to e.g.
+# "observed on QRadar CE 7.5". Do not change the frontend until results are in.
+reference_time: '2026-06-01T00:00:00Z'
+samples:
+- name: line 1
+  log: '<13>Mar 24 10:00:00 rl-confirm-06 rltest: evt=T3 user=  carol  ;'
+  ground_truth_source: 'assumed: Rosettalog''s current interpretation; to be confirmed on QRadar CE'
+  expected:
+    EventName: T3
+    UserName: '  carol  '

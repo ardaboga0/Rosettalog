@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Rosettalog confirmation case: literal text (incl. backslashes) in a substitution template. Synthetic; see ../README.md. -->
+<device-extension xmlns="event_parsing/device_extension">
+  <pattern id="Evt" xmlns=""><![CDATA[evt=(\w+)]]></pattern>
+  <pattern id="User" xmlns=""><![CDATA[x=(\w+)@(\w+)]]></pattern>
+  <match-group order="1" description="only group" xmlns="">
+    <matcher field="EventName" order="1" pattern-id="Evt" capture-group="1"/>
+    <matcher field="UserName" order="1" pattern-id="User" capture-group="\1\\\2" enable-substitutions="true"/>
+  </match-group>
+</device-extension>

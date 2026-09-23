@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Rosettalog confirmation case: Java constructs under QRadar's default (Adaptive) pattern engine. Synthetic; see ../README.md. -->
+<device-extension xmlns="event_parsing/device_extension">
+  <pattern id="Evt" xmlns=""><![CDATA[evt=(\w++)]]></pattern>
+  <pattern id="User" xmlns=""><![CDATA[(?<=user=)\w+]]></pattern>
+  <pattern id="Port" xmlns=""><![CDATA[p=(['"])(\d+)\1]]></pattern>
+  <match-group order="1" description="only group" xmlns="">
+    <matcher field="EventName" order="1" pattern-id="Evt" capture-group="1"/>
+    <matcher field="UserName" order="1" pattern-id="User" capture-group="0"/>
+    <matcher field="SourcePort" order="1" pattern-id="Port" capture-group="2"/>
+  </match-group>
+</device-extension>

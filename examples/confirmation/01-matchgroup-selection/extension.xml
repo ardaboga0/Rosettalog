@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Rosettalog confirmation case: which match group applies. Synthetic; see ../README.md. -->
+<device-extension xmlns="event_parsing/device_extension">
+  <pattern id="EvA" xmlns=""><![CDATA[evt=(A\w*)]]></pattern>
+  <pattern id="EvAny" xmlns=""><![CDATA[evt=(\w+)]]></pattern>
+  <pattern id="User" xmlns=""><![CDATA[user=(\w+)]]></pattern>
+  <pattern id="Acct" xmlns=""><![CDATA[acct=(\w+)]]></pattern>
+  <pattern id="Port" xmlns=""><![CDATA[port=(\d+)]]></pattern>
+  <match-group order="1" description="group 1" xmlns="">
+    <matcher field="EventName" order="1" pattern-id="EvA" capture-group="1"/>
+    <matcher field="UserName" order="1" pattern-id="User" capture-group="1"/>
+  </match-group>
+  <match-group order="2" description="group 2" xmlns="">
+    <matcher field="EventName" order="1" pattern-id="EvAny" capture-group="1"/>
+    <matcher field="UserName" order="1" pattern-id="Acct" capture-group="1"/>
+    <matcher field="SourcePort" order="1" pattern-id="Port" capture-group="1"/>
+  </match-group>
+</device-extension>

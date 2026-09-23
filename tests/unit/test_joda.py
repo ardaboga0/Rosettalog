@@ -36,7 +36,7 @@ def test_parse_and_strptime(fmt: str, text: str, iso: str, strptime: str) -> Non
 
 
 def test_syslog_space_padded_day_does_not_match_single_space_format() -> None:
-    # Joda literals are exact; QRadar would not parse "Mar  4" with "MMM d".
+    # Assumption (confirmation case 09): Joda literals are exact, so "Mar  4" fails "MMM d".
     assert parse("Mar  4 10:00:00", compile_format("MMM d HH:mm:ss"), now=NOW) is None
 
 

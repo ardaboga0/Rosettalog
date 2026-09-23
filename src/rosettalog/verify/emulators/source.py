@@ -46,7 +46,8 @@ class SourceEmulator:
             if tr.pattern is None:
                 self.unavailable[pid] = "; ".join(i.message for i in tr.issues)
             else:
-                self.compiled[pid] = pyregex.compile(tr.pattern)
+                # Java's \w \d \s \b and (?i) are ASCII-only by default; so is ASCII mode here.
+                self.compiled[pid] = pyregex.compile(tr.pattern, pyregex.ASCII)
 
     def _search(self, pid: str, log: str) -> Any:
         rx = self.compiled.get(pid)

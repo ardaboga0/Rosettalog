@@ -1,0 +1,34 @@
+# Confirmation case 03: event-match-multiple semantics.
+# `expected` encodes Rosettalog's CURRENT ASSUMPTION. After observing QRadar CE,
+# record the observed values here and set ground_truth_source to e.g.
+# "observed on QRadar CE 7.5". Do not change the frontend until results are in.
+reference_time: '2026-06-01T00:00:00Z'
+samples:
+- name: line 1
+  log: '<13>Mar 24 10:00:00 rl-confirm-03 rltest: id=100 kind=foo'
+  ground_truth_source: 'assumed: Rosettalog''s current interpretation; to be confirmed on QRadar CE'
+  expected:
+    EventName: '100'
+    EventCategory: SingleCat
+    EventSeverity: '2'
+- name: line 2
+  log: '<13>Mar 24 10:00:00 rl-confirm-03 rltest: kind=foo'
+  ground_truth_source: 'assumed: Rosettalog''s current interpretation; to be confirmed on QRadar CE'
+  expected:
+    EventName: foo
+    EventCategory: MultiCat
+    EventSeverity: '8'
+- name: line 3
+  log: '<13>Mar 24 10:00:00 rl-confirm-03 rltest: id=200 kind=bar'
+  ground_truth_source: 'assumed: Rosettalog''s current interpretation; to be confirmed on QRadar CE'
+  expected:
+    EventName: '200'
+    EventCategory: MultiCat
+    EventSeverity: '8'
+- name: line 4
+  log: '<13>Mar 24 10:00:00 rl-confirm-03 rltest: id=300'
+  ground_truth_source: 'assumed: Rosettalog''s current interpretation; to be confirmed on QRadar CE'
+  expected:
+    EventName: '300'
+    EventCategory: null
+    EventSeverity: null

@@ -1,0 +1,24 @@
+# Confirmation case 09: DeviceTime without year or offset; Joda leniency.
+# `expected` encodes Rosettalog's CURRENT ASSUMPTION. After observing QRadar CE,
+# record the observed values here and set ground_truth_source to e.g.
+# "observed on QRadar CE 7.5". Do not change the frontend until results are in.
+reference_time: '2026-06-01T00:00:00Z'
+samples:
+- name: line 1
+  log: '<13>Mar 24 10:00:00 rl-confirm-09 rltest: evt=E1 ts=Mar 24 10:00:00'
+  ground_truth_source: 'assumed: Rosettalog''s current interpretation; to be confirmed on QRadar CE'
+  expected:
+    EventName: E1
+    DeviceTime: '2026-03-24T10:00:00.000Z'
+- name: line 2
+  log: '<13>Mar 24 10:00:00 rl-confirm-09 rltest: evt=E2 ts=Mar  4 10:00:00'
+  ground_truth_source: 'assumed: Rosettalog''s current interpretation; to be confirmed on QRadar CE'
+  expected:
+    EventName: E2
+    DeviceTime: null
+- name: line 3
+  log: '<13>Mar 24 10:00:00 rl-confirm-09 rltest: evt=E3 ts=mar 24 10:00:00'
+  ground_truth_source: 'assumed: Rosettalog''s current interpretation; to be confirmed on QRadar CE'
+  expected:
+    EventName: E3
+    DeviceTime: '2026-03-24T10:00:00.000Z'

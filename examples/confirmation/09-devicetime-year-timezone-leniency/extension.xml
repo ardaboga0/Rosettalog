@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Rosettalog confirmation case: DeviceTime without year or offset; Joda leniency. Synthetic; see ../README.md. -->
+<device-extension xmlns="event_parsing/device_extension">
+  <pattern id="Evt" xmlns=""><![CDATA[evt=(\w+)]]></pattern>
+  <pattern id="Ts" xmlns=""><![CDATA[ts=(\w{3} +\d{1,2} \d{2}:\d{2}:\d{2})]]></pattern>
+  <match-group order="1" description="only group" xmlns="">
+    <matcher field="EventName" order="1" pattern-id="Evt" capture-group="1"/>
+    <matcher field="DeviceTime" order="1" pattern-id="Ts" capture-group="1" ext-data="MMM d HH:mm:ss"/>
+  </match-group>
+</device-extension>

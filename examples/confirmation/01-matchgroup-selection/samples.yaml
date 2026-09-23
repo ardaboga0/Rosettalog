@@ -1,0 +1,27 @@
+# Confirmation case 01: which match group applies.
+# `expected` encodes Rosettalog's CURRENT ASSUMPTION. After observing QRadar CE,
+# record the observed values here and set ground_truth_source to e.g.
+# "observed on QRadar CE 7.5". Do not change the frontend until results are in.
+reference_time: '2026-06-01T00:00:00Z'
+samples:
+- name: line 1
+  log: '<13>Mar 24 10:00:00 rl-confirm-01 rltest: evt=ALPHA user=u1 acct=a1 port=1111'
+  ground_truth_source: 'assumed: Rosettalog''s current interpretation; to be confirmed on QRadar CE'
+  expected:
+    EventName: ALPHA
+    UserName: u1
+    SourcePort: null
+- name: line 2
+  log: '<13>Mar 24 10:00:00 rl-confirm-01 rltest: evt=BETA user=u2 acct=a2 port=2222'
+  ground_truth_source: 'assumed: Rosettalog''s current interpretation; to be confirmed on QRadar CE'
+  expected:
+    EventName: BETA
+    UserName: a2
+    SourcePort: '2222'
+- name: line 3
+  log: '<13>Mar 24 10:00:00 rl-confirm-01 rltest: user=u3 acct=a3 port=3333'
+  ground_truth_source: 'assumed: Rosettalog''s current interpretation; to be confirmed on QRadar CE'
+  expected:
+    EventName: null
+    UserName: null
+    SourcePort: null

@@ -40,26 +40,57 @@ def _findings_table(findings: list[Finding]) -> list[str]:
 
 
 def _verification(v: VerificationResult) -> list[str]:
-    lines = [f"**Verification:** {v.passed}/{v.total} samples match. _{v.engine_note}_", ""]
+    truth = ", ".join(f"{k} ({n})" for k, n in v.ground_truth.items()) or "none"
+    lines = [
+        f"**Verification:** {v.passed}/{v.total} samples match. _{v.engine_note}_",
+        "",
+        f'Ground truth of the samples: {truth}. Samples whose ground truth is "assumed" only '
+        "confirm consistency with Rosettalog's reading of the source, not QRadar's behaviour.",
+        "",
+    ]
     if v.error:
         lines += [f"> Emulation error: {_cell(v.error)}", ""]
     rows = [
-        (s.name, c)
-        for s in v.samples
-        for c in s.checks
-        if not c.ok or not c.source_matches_expected
+        (s, c) for s in v.samples for c in s.checks if not c.ok or not c.source_matches_expected
     ]
     if rows:
         lines += [
-            "| Sample | Field | Target field | QRadar (emulated) | Generated | Expected |",
-            "|---|---|---|---|---|---|",
+            "| Sample | Ground truth | Field | Target field | QRadar (emulated) | Generated "
+            "| Expected |",
+            "|---|---|---|---|---|---|---|",
         ]
-        for name, c in rows:
+        for sample, c in rows:
             expected = _code(c.expected) if c.has_expected else ""
             lines.append(
-                f"| {_cell(name)} | {c.field} | {c.target_field or '*(not generated)*'} | "
-                f"{_code(c.source)} | {_code(c.target)} | {expected} |"
+                f"| {_cell(sample.name)} | {_cell(sample.ground_truth_source or '')} | {c.field} "
+                f"| {c.target_field or '*(not generated)*'} | {_code(c.source)} "
+                f"| {_code(c.target)} | {expected} |"
             )
+        lines.append("")
+    return lines
+
+
+SCOPE_TEXT = {
+    "index-time": "Index-time settings: take effect only for data indexed **after** deployment, "
+    "on the instance that parses the data (e.g. Splunk indexers / heavy forwarders). Already "
+    "indexed data is not changed.",
+    "search-time": "Search-time extractions: deploy to search heads; they apply to all data at "
+    "search time, including data indexed before deployment.",
+    "query-time": "Query-time parser: applies to all data it is run against, including data "
+    "ingested before deployment.",
+}
+
+
+def _settings(tr: TargetReport) -> list[str]:
+    lines: list[str] = []
+    for scope, text in SCOPE_TEXT.items():
+        items = [s for s in tr.settings if s.scope == scope]
+        if not items:
+            continue
+        lines += [f"**{text}**", "", "| Setting | File | Fields | Note |", "|---|---|---|---|"]
+        for s in items:
+            fields = ", ".join(f"`{f}`" for f in s.fields)
+            lines.append(f"| `{_cell(s.setting)}` | {s.file} | {fields} | {_cell(s.note)} |")
         lines.append("")
     return lines
 
@@ -72,6 +103,7 @@ def _target(tr: TargetReport) -> list[str]:
         lines += ["| Source field | Generated field |", "|---|---|"]
         lines += [f"| {k} | `{v}` |" for k, v in tr.field_names.items()]
         lines.append("")
+    lines += _settings(tr)
     lines += _findings_table(tr.findings)
     if tr.verification is not None:
         lines += _verification(tr.verification)

@@ -44,6 +44,7 @@ class FieldCheck(BaseModel):
 class SampleResult(BaseModel):
     name: str
     log: str
+    ground_truth_source: str | None = None
     checks: list[FieldCheck] = Field(default_factory=list)
 
     @computed_field  # type: ignore[prop-decorator]
@@ -57,7 +58,19 @@ class VerificationResult(BaseModel):
     engine_note: str = ""
     error: str | None = None
     source_not_emulated: dict[str, str] = Field(default_factory=dict)
+    unknown_expected_fields: list[str] = Field(default_factory=list)
     samples: list[SampleResult] = Field(default_factory=list)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def ground_truth(self) -> dict[str, int]:
+        """Ground truth source -> number of samples ("none" = no expected values)."""
+        counts: dict[str, int] = {}
+        for s in self.samples:
+            has_expected = any(c.has_expected for c in s.checks)
+            key = (s.ground_truth_source or "unspecified") if has_expected else "none"
+            counts[key] = counts.get(key, 0) + 1
+        return counts
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -89,6 +102,18 @@ class VerificationResult(BaseModel):
                     path=f"pattern[id={pid}]",
                     message=f"The source pattern could not be emulated locally ({reason}); "
                     "fields depending on it were not verified.",
+                    target=self.target,
+                )
+            )
+        if self.unknown_expected_fields:
+            out.append(
+                Finding(
+                    status=Status.PARTIAL,
+                    code="VERIFY_UNKNOWN_EXPECTED_FIELD",
+                    path="",
+                    message="Samples list expected values for field(s) this parser does not "
+                    f"produce: {', '.join(self.unknown_expected_fields)}. They were not checked.",
+                    suggestion="Fix the field names (canonical QRadar names) in the samples file.",
                     target=self.target,
                 )
             )
@@ -148,7 +173,14 @@ def verify(artifact: Artifact, result: BackendResult, samples: SampleSet) -> Ver
         except Exception as exc:
             outcome.error = f"{samples.label(index)}: {exc}"
             break
-        res = SampleResult(name=samples.label(index), log=sample.log)
+        res = SampleResult(
+            name=samples.label(index),
+            log=sample.log,
+            ground_truth_source=sample.ground_truth_source,
+        )
+        for fld in sample.expected or {}:
+            if fld not in spec.fields() and fld not in outcome.unknown_expected_fields:
+                outcome.unknown_expected_fields.append(fld)
         for fld in spec.fields():
             if fld in unverifiable:
                 continue

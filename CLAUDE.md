@@ -5,9 +5,19 @@ Guidance for AI coding assistants (and humans) working in this repository.
 ## Scope
 
 Rosettalog is **defensive SIEM migration tooling**. It translates detection and parsing content
-(QRadar LSX today; AQL and rules later) into other SIEMs' formats. It never connects to a SIEM or
+(QRadar LSX today; later, rules exported to Sigma and AQL through external translators) into
+other SIEMs' formats. It never connects to a SIEM or
 sends data anywhere. Stay within this scope. Do not add features for evading detection or for
 accessing systems.
+
+**Positioning: parsing migration first; integrate with, don't duplicate, rule converters.** The
+core value is migrating *parsing logic* with honest findings and field-level verification. Do
+**not** write an AQL grammar or translator, or a rule-to-query converter. Existing projects
+(Uncoder.io, pySigma, ARuleCon) do that.
+- M2 (AQL): only an integration point plus an optional adapter to an external translator, whose
+  output and gaps become findings.
+- M3 (rules/building blocks): IR detection model → Sigma only; target queries come from pySigma.
+- M2 and M3 have not been started and need the maintainer's approval.
 
 ## Non-negotiable rules
 
@@ -23,6 +33,18 @@ accessing systems.
    `pyproject.toml`.
 4. **Emulators interpret generated text.** They do not use backend internals, and they raise on
    unsupported constructs.
+5. **Ground truth.** Every sample in `examples/` and tests has `expected` values for *every*
+   field the parser produces, plus a `ground_truth_source` ("observed on QRadar CE x.y",
+   "derived from IBM docs" or "assumed"). Tests enforce this. Never label assumed values as
+   observed.
+6. **Assumptions are frozen until confirmed.** The assumed LSX behaviours in
+   `docs/lsx-support-matrix.md` (confirmation cases in `examples/confirmation/`) must not be
+   changed until observed QRadar CE results are recorded. If a confirmation case's `expected`
+   changes to observed values and the tests fail, fix the frontend or emulator and its finding,
+   not the expected values.
+7. **Deployment scope.** Every generated setting is declared in `BackendResult.settings` as
+   index-time, search-time or query-time. A translated field that depends on index-time
+   configuration needs a finding (e.g. `SPLUNK_INDEX_TIME_DEPENDENCY`).
 
 ## Layout
 
@@ -42,6 +64,8 @@ accessing systems.
 - `src/rosettalog/pipeline.py`, `cli.py`: orchestration and the typer CLI.
 - `tests/`: `unit/`, `golden/` (pinned outputs), `e2e/` (CLI), `fixtures/lsx/` (synthetic).
 - `examples/acme_firewall/`: synthetic end-to-end example.
+- `examples/confirmation/`: one minimal LSX, `sample.log` and `samples.yaml` per assumed LSX
+  behaviour, to run on QRadar CE. `sample.log` and `samples.yaml` must stay identical (tested).
 
 ## Conventions
 
@@ -67,12 +91,11 @@ uv run rosettalog convert examples/acme_firewall/acme_fw.lsx.xml --to sentinel -
     -s examples/acme_firewall/samples.yaml -o out/
 ```
 
-## Known assumptions (keep findings in sync if you change these)
+## Known assumptions
 
-- With several match groups, the first group (by `order`) whose EventName pattern matches is
-  applied (`LSX_MATCHGROUP_SELECTION_ASSUMED`).
-- `event-match-multiple`: EventName comes from the capture, and the category and severity apply
-  when the pattern matches.
-- `event-match-single` builds EventCategory/EventSeverity lookups keyed by EventName. A matcher
-  EventCategory is the fallback.
-- An empty capture counts as "no value" on every engine.
+The full list, with the findings each one emits and its QRadar CE confirmation case, is in
+`docs/lsx-support-matrix.md` under "Assumed behaviours". Do not change these semantics until
+observed results are recorded (rule 6).
+
+The source emulator approximates Java regex with the Python `regex` module in ASCII mode. The
+remaining known differences are listed in `docs/architecture.md`.

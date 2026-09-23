@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Rosettalog confirmation case: event-match-multiple semantics. Synthetic; see ../README.md. -->
+<device-extension xmlns="event_parsing/device_extension">
+  <pattern id="Id" xmlns=""><![CDATA[id=(\d+)]]></pattern>
+  <pattern id="Kind" xmlns=""><![CDATA[kind=(\w+)]]></pattern>
+  <match-group order="1" description="only group" xmlns="">
+    <matcher field="EventName" order="1" pattern-id="Id" capture-group="1"/>
+    <event-match-single event-name="100" device-event-category="SingleCat" severity="2"/>
+    <event-match-multiple pattern-id="Kind" capture-group-index="1" device-event-category="MultiCat" severity="8"/>
+  </match-group>
+</device-extension>

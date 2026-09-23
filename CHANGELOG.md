@@ -6,7 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Roadmap re-scoped. M2 is now an integration point plus an optional adapter for external AQL
+  translators (no AQL grammar). M3 is QRadar rules → Sigma only, with pySigma for targets.
+- Splunk props.conf now has separate, commented index-time and search-time sections.
+- Emulators run Java and PCRE patterns in ASCII mode, which matches both engines' defaults for
+  `\w \d \s \b` and `(?i)`.
+- `SPLUNK_INDEX_TIME_SETTINGS` (FULL note) is replaced by `SPLUNK_INDEX_TIME_DEPENDENCY`
+  (PARTIAL: `_time` depends on index-time settings that only affect newly indexed data).
+
+### Fixed
+- Splunk: with several match groups, a field extracted only by a later group was applied even
+  when an earlier group had been selected. Found by confirmation case 01.
+
 ### Added
+- `ground_truth_source` per sample, `--require-ground-truth`, and a ground-truth summary in the
+  report. Shipped samples must have complete expected values (enforced by tests).
+- `BackendResult.settings`: each generated setting is declared as index-time, search-time or
+  query-time, and the report lists them in separate sections.
+- New findings: `SPLUNK_INDEX_TIME_DEPENDENCY`, `SPLUNK_EVENT_BREAKING_ASSUMED`,
+  `VERIFY_UNKNOWN_EXPECTED_FIELD`.
+- `examples/confirmation/`: 15 minimal QRadar CE cases, one per assumed LSX behaviour.
 - Vendor-neutral IR for regex-based parsers, with findings (FULL / PARTIAL / UNSUPPORTED).
 - QRadar Log Source Extension (LSX) frontend: patterns, match groups, matchers (order,
   capture groups, substitutions, Joda `ext-data` timestamps), event-match-single/multiple.

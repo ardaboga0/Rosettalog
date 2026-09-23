@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Rosettalog confirmation case: whether patterns see the syslog header. Synthetic; see ../README.md. -->
+<device-extension xmlns="event_parsing/device_extension">
+  <pattern id="Evt" xmlns=""><![CDATA[evt=(\w+)]]></pattern>
+  <pattern id="Host" xmlns=""><![CDATA[^<\d+>\w{3} +\d{1,2} [\d:]{8} (\S+)]]></pattern>
+  <match-group order="1" description="only group" xmlns="">
+    <matcher field="EventName" order="1" pattern-id="Evt" capture-group="1"/>
+    <matcher field="UserName" order="1" pattern-id="Host" capture-group="1"/>
+  </match-group>
+</device-extension>

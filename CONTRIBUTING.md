@@ -15,6 +15,12 @@ the development setup, the project rules, and a walkthrough for adding a new tar
    vendor-shipped content (for example IBM's DSMs or content packs), real customer logs, or
    anything containing real hostnames, IPs, user names or secrets. Use documentation ranges
    (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`) and fictional vendors.
+   Every sample you add (in `samples.yaml` files) needs `expected` values for every field the
+   parser produces, plus an honest `ground_truth_source`. Only write "observed on QRadar …"
+   if you actually observed the values.
+5. **Scope.** Rosettalog migrates parsing logic. Rule and query translation is delegated to
+   existing converters (pySigma, Uncoder and others). Please do not add an AQL grammar or a
+   rule-to-query translator; propose an integration adapter instead.
 3. **Defensive scope.** Rosettalog translates detection and parsing content. Contributions that
    evade detection, or that exfiltrate or tamper with data, are out of scope.
 4. **The core stays SIEM-agnostic.** `pipeline.py`, `ir/`, `report/` and `verify/harness.py`

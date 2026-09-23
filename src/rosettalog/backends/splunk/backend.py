@@ -40,7 +40,7 @@ from rosettalog.ir import (
     Template,
 )
 from rosettalog.ir.fields import resolve_names
-from rosettalog.plugins import BackendResult, GeneratedFile
+from rosettalog.plugins import BackendResult, DeploymentSetting, GeneratedFile
 from rosettalog.regex.tokenizer import GroupKind, Kind, RegexSyntaxError, tokenize
 from rosettalog.regex.translate import translate_tokens
 from rosettalog.timefmt.joda import compile_format
@@ -241,12 +241,32 @@ class SplunkBackend:
                                  "constructs.")  # fmt: skip
                 continue
             if multi:
-                value = "case(" + ", ".join(f"{selectors[o]}, {t}" for o, t in rendered) + ")"
+                # Every group's selector must appear, in order: a group that wins but does not
+                # set this field must yield null, not fall through to a later group.
+                by_order = dict(rendered)
+                last = max(by_order)
+                branches = [
+                    f"{sel}, {by_order.get(order, 'null()')}"
+                    for order, sel in selectors.items()
+                    if order <= last
+                ]
+                value = "case(" + ", ".join(branches) + ")"
             else:
                 value = rendered[0][1]
             evals.append((target_name, value))
             field_names[canonical] = target_name
 
+        findings.append(
+            Finding(
+                status=Status.FULL,
+                code="SPLUNK_EVENT_BREAKING_ASSUMED",
+                path="",
+                message="props.conf sets SHOULD_LINEMERGE = false (one event per line, as QRadar "
+                "receives one event per syslog message). This is an index-time setting: it only "
+                "affects data indexed after deployment on indexers/heavy forwarders.",
+                target=NAME,
+            )
+        )
         if any(t.format.startswith("rl_") or " rl_" in t.format for t in r.transforms):
             findings.append(
                 Finding(
@@ -272,7 +292,51 @@ class SplunkBackend:
             findings=findings,
             field_names=field_names,
             options={"sourcetype": sourcetype},
+            settings=self._settings(artifact, props_extra, r.transforms, evals),
         )
+
+    @staticmethod
+    def _settings(
+        artifact: Artifact,
+        index_time: list[tuple[str, str]],
+        transforms: list[Transform],
+        evals: list[tuple[str, str]],
+    ) -> list[DeploymentSetting]:
+        report = f"REPORT-rl_{artifact.id}"
+        out = [
+            DeploymentSetting(
+                scope="index-time",
+                file="props.conf",
+                setting="SHOULD_LINEMERGE",
+                note="event breaking: one event per line",
+            )
+        ]
+        out += [
+            DeploymentSetting(
+                scope="index-time",
+                file="props.conf",
+                setting=key,
+                fields=[TIME_FIELD],
+                note="timestamp recognition",
+            )
+            for key, _ in index_time
+        ]
+        out += [
+            DeploymentSetting(
+                scope="search-time",
+                file="props.conf + transforms.conf",
+                setting=f"{report} -> [{t.name}]",
+                fields=[pair.split("::", 1)[0] for pair in t.format.split()],
+            )
+            for t in transforms
+        ]
+        out += [
+            DeploymentSetting(
+                scope="search-time", file="props.conf", setting=f"EVAL-{name}", fields=[name]
+            )
+            for name, _ in evals
+        ]
+        return out
 
     def _timestamp(
         self,
@@ -333,11 +397,16 @@ class SplunkBackend:
         settings.append(("TIME_FORMAT", fmt.strptime))
         findings.append(
             Finding(
-                status=Status.FULL,
-                code="SPLUNK_INDEX_TIME_SETTINGS",
+                status=Status.PARTIAL,
+                code="SPLUNK_INDEX_TIME_DEPENDENCY",
                 path=rule.path,
-                message="TIME_PREFIX/TIME_FORMAT are index-time settings: deploy props.conf to "
-                "indexers or heavy forwarders, not only search heads.",
+                message="DeviceTime is translated to _time through index-time settings "
+                f"({', '.join(k for k, _ in settings)}). They take effect only on the first full "
+                "Splunk instance that parses the data (indexer or heavy forwarder) and only for "
+                "events indexed after deployment; already indexed events keep their _time.",
+                suggestion="Deploy the index-time section of props.conf to indexers/heavy "
+                "forwarders before onboarding the source; re-index historical data if its "
+                "_time must change.",
                 target=NAME,
                 line=rule.line,
             )
@@ -395,15 +464,31 @@ class SplunkBackend:
         transforms: list[Transform],
         evals: list[tuple[str, str]],
     ) -> str:
-        lines = [*self._header(artifact), "", f"[{sourcetype}]", "SHOULD_LINEMERGE = false"]
+        lines = [
+            *self._header(artifact),
+            "",
+            f"[{sourcetype}]",
+            "# ---- Index-time settings -------------------------------------------------------",
+            "# Deploy to indexers / heavy forwarders (the first full instance parsing the data).",
+            "# They affect ONLY events indexed after deployment; indexed data is not changed.",
+            "SHOULD_LINEMERGE = false",
+        ]
         lines += [f"{k} = {v}" for k, v in extra]
+        lines += [
+            "# ---- Search-time extractions ---------------------------------------------------",
+            "# Deploy to search heads. They apply at search time to all events of this",
+            "# sourcetype, including data indexed before deployment.",
+        ]
         if transforms:
             lines.append(f"REPORT-rl_{artifact.id} = " + ", ".join(t.name for t in transforms))
         lines += [f"EVAL-{name} = {value}" for name, value in evals]
         return "\n".join(lines) + "\n"
 
     def _transforms(self, artifact: Artifact, transforms: list[Transform]) -> str:
-        lines = self._header(artifact)
+        lines = [
+            *self._header(artifact),
+            "# Search-time field extractions referenced by REPORT- in props.conf (search heads).",
+        ]
         for t in transforms:
             lines += ["", f"[{t.name}]", f"REGEX = {t.regex}", f"FORMAT = {t.format}"]
         return "\n".join(lines) + "\n"

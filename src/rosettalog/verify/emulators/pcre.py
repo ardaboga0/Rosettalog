@@ -95,4 +95,5 @@ def pcre_to_python(pattern: str) -> str:
 
 @lru_cache(maxsize=2048)
 def compile_pcre(pattern: str) -> Any:
-    return pyregex.compile(pcre_to_python(pattern))
+    # PCRE without UCP (Splunk's default) treats \w \d \s \b and (?i) as ASCII-only.
+    return pyregex.compile(pcre_to_python(pattern), pyregex.ASCII)

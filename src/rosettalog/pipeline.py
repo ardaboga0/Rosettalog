@@ -16,7 +16,7 @@ from rosettalog.ir import Artifact, Finding, Provenance, Status, aggregate_statu
 from rosettalog.plugins import frontends, get_backend
 from rosettalog.report import ArtifactReport, MigrationReport, TargetReport
 from rosettalog.verify.harness import verify
-from rosettalog.verify.samples import SampleSet
+from rosettalog.verify.samples import SampleSet, ground_truth_problems
 
 
 def _unsupported_input(path: Path, message: str) -> Artifact:
@@ -74,9 +74,26 @@ def run(
     options: Mapping[str, Mapping[str, str]] | None = None,
     out_dir: Path | None = None,
     samples: SampleSet | None = None,
+    require_ground_truth: bool = False,
     inputs: Sequence[str] = (),
 ) -> MigrationReport:
+    """Translate ``artifacts`` for every target.
+
+    With ``require_ground_truth``, every sample must carry ``expected`` values for every field the
+    parser produces plus a ``ground_truth_source``; otherwise :class:`InputError` is raised.
+    """
     options = options or {}
+    if require_ground_truth:
+        if samples is None:
+            raise InputError("--require-ground-truth needs a samples file.")
+        problems = [
+            f"{a.name}: {p}"
+            for a in artifacts
+            if a.parser is not None
+            for p in ground_truth_problems(samples, a.parser.fields())
+        ]
+        if problems:
+            raise InputError("Samples are not usable as ground truth:\n  " + "\n  ".join(problems))
     backends = {t: get_backend(t) for t in targets}
     report = MigrationReport(
         tool_version=__version__,
@@ -136,6 +153,7 @@ def run(
                     findings=findings,
                     files=written,
                     field_names=result.field_names,
+                    settings=result.settings,
                     verification=verification,
                 )
             )

@@ -43,7 +43,7 @@ from rosettalog.ir import (
     Template,
 )
 from rosettalog.ir.fields import resolve_names
-from rosettalog.plugins import BackendResult, GeneratedFile
+from rosettalog.plugins import BackendResult, DeploymentSetting, GeneratedFile
 from rosettalog.timefmt.joda import Comp, compile_format
 
 NAME = "sentinel"
@@ -330,6 +330,18 @@ class SentinelBackend:
             findings=findings,
             field_names=field_names,
             options=effective,
+            settings=[
+                DeploymentSetting(
+                    scope="query-time",
+                    file=f"{function}.kql",
+                    setting=f"function {function}",
+                    fields=list(field_names.values()),
+                    note="parses at query time; applies to all data in the table, including "
+                    "data ingested before deployment",
+                )
+            ]
+            if files
+            else [],
         )
 
     @staticmethod

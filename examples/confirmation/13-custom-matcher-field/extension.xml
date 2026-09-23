@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Rosettalog confirmation case: matcher with an undocumented field name. Synthetic; see ../README.md. -->
+<device-extension xmlns="event_parsing/device_extension">
+  <pattern id="Evt" xmlns=""><![CDATA[evt=(\w+)]]></pattern>
+  <pattern id="C" xmlns=""><![CDATA[custom=(\w+)]]></pattern>
+  <match-group order="1" description="only group" xmlns="">
+    <matcher field="EventName" order="1" pattern-id="Evt" capture-group="1"/>
+    <matcher field="MyCustomField" order="1" pattern-id="C" capture-group="1"/>
+  </match-group>
+</device-extension>

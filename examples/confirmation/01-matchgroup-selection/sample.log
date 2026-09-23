@@ -1,0 +1,3 @@
+<13>Mar 24 10:00:00 rl-confirm-01 rltest: evt=ALPHA user=u1 acct=a1 port=1111
+<13>Mar 24 10:00:00 rl-confirm-01 rltest: evt=BETA user=u2 acct=a2 port=2222
+<13>Mar 24 10:00:00 rl-confirm-01 rltest: user=u3 acct=a3 port=3333

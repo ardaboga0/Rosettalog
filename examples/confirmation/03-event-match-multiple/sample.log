@@ -1,0 +1,4 @@
+<13>Mar 24 10:00:00 rl-confirm-03 rltest: id=100 kind=foo
+<13>Mar 24 10:00:00 rl-confirm-03 rltest: kind=foo
+<13>Mar 24 10:00:00 rl-confirm-03 rltest: id=200 kind=bar
+<13>Mar 24 10:00:00 rl-confirm-03 rltest: id=300

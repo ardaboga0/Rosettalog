@@ -101,7 +101,8 @@ A test (`tests/unit/test_docs.py`) checks that every code emitted by the source 
 | `SPLUNK_SINGLE_TIMESTAMP` | PARTIAL | Only one TIME_FORMAT is allowed per sourcetype, so only the first DeviceTime candidate is used. |
 | `SPLUNK_TIME_PREFIX_UNDERIVABLE` | PARTIAL | TIME_PREFIX could not be derived from the pattern. |
 | `SPLUNK_TIMESTAMP_UNSUPPORTED` | UNSUPPORTED | The timestamp is not a single capture group. |
-| `SPLUNK_INDEX_TIME_SETTINGS` | FULL | Deploy the timestamp settings to indexers or heavy forwarders. |
+| `SPLUNK_INDEX_TIME_DEPENDENCY` | PARTIAL | A translated field (`_time` from DeviceTime) depends on index-time settings (`TIME_PREFIX`, `TIME_FORMAT`). These take effect only on the instance that parses the data (indexer or heavy forwarder), and only for events indexed after deployment. |
+| `SPLUNK_EVENT_BREAKING_ASSUMED` | FULL | `SHOULD_LINEMERGE = false` (one event per line) is an index-time setting and only affects newly indexed data. |
 | `SPLUNK_INTERMEDIATE_FIELDS` | FULL | `rl_*` helper fields are visible at search time. |
 
 ## Verification
@@ -111,3 +112,4 @@ A test (`tests/unit/test_docs.py`) checks that every code emitted by the source 
 | `VERIFY_MISMATCH` | PARTIAL | For a field, the emulated target output differs from the emulated source, or from the expected value, on at least one sample. |
 | `VERIFY_EMULATION_ERROR` | PARTIAL | The generated content could not be emulated. |
 | `VERIFY_SOURCE_NOT_EMULATED` | PARTIAL | A source pattern could not be emulated, so its fields were not verified. |
+| `VERIFY_UNKNOWN_EXPECTED_FIELD` | PARTIAL | A sample lists expected values for a field the parser does not produce (probably a typo), so it was not checked. |

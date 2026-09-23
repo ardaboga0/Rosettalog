@@ -125,3 +125,22 @@ def test_splunk_rejects_unknown_settings() -> None:
 )
 def test_pcre_conversion(pcre: str, python: str) -> None:
     assert pcre_to_python(pcre) == python
+
+
+def test_source_emulator_uses_java_ascii_classes() -> None:
+    from rosettalog.ir import Capture, FieldRule, MatchGroup, ParserSpec, Pattern
+    from rosettalog.verify.emulators.source import SourceEmulator
+
+    spec = ParserSpec(
+        patterns={"P": Pattern(id="P", source=r"u=(\w+)", case_insensitive=True)},
+        match_groups=[
+            MatchGroup(
+                order=1,
+                rules=[
+                    FieldRule(field="UserName", expr=Capture(pattern_id="P", group=1), path="p")
+                ],
+            )
+        ],
+    )
+    # Java: \w is [a-zA-Z_0-9] unless UNICODE_CHARACTER_CLASS is set, so the match stops at 'é'.
+    assert SourceEmulator(spec).extract("U=josé", now=NOW) == {"UserName": "jos"}
