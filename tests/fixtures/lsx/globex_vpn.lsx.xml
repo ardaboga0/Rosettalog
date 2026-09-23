@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic LSX for the fictional "Globex VPN" concentrator. Written from scratch for tests. -->
+<device-extension xmlns="event_parsing/device_extension">
+  <pattern id="LoginEvent" xmlns=""><![CDATA[event=(LOGIN_\w+)]]></pattern>
+  <pattern id="LoginUser" xmlns=""><![CDATA[user=(\S+)]]></pattern>
+  <pattern id="From" xmlns=""><![CDATA[from (\d{1,3}(?:\.\d{1,3}){3})]]></pattern>
+  <pattern id="SyslogTime" xmlns=""><![CDATA[^(\w{3} +\d{1,2} \d{2}:\d{2}:\d{2})]]></pattern>
+
+  <pattern id="Tunnel" case-insensitive="true" xmlns=""><![CDATA[tunnel (up|down)]]></pattern>
+  <pattern id="RealmAccount" xmlns=""><![CDATA[realm=(\w+) account=(\w+)]]></pattern>
+  <pattern id="Peer" xmlns=""><![CDATA[peer=(\d{1,3}(?:\.\d{1,3}){3})]]></pattern>
+  <pattern id="PeerPort" xmlns=""><![CDATA[peer=\S+?:(\d+)]]></pattern>
+  <pattern id="AtTime" xmlns=""><![CDATA[at (\d{2}/[A-Za-z]{3}/\d{4}:\d{2}:\d{2}:\d{2} [AP]M)]]></pattern>
+
+  <match-group order="1" description="Logins" xmlns="">
+    <matcher field="EventName" order="1" pattern-id="LoginEvent" capture-group="1"/>
+    <matcher field="UserName" order="1" pattern-id="LoginUser" capture-group="1"/>
+    <matcher field="SourceIp" order="1" pattern-id="From" capture-group="1"/>
+    <matcher field="DeviceTime" order="1" pattern-id="SyslogTime" capture-group="1" ext-data="MMM d HH:mm:ss"/>
+    <event-match-single event-name="LOGIN_OK" device-event-category="Authentication Success" severity="3"/>
+    <event-match-single event-name="LOGIN_FAIL" device-event-category="Authentication Failure" severity="6"/>
+  </match-group>
+
+  <match-group order="2" description="Tunnels" xmlns="">
+    <matcher field="UserName" order="1" pattern-id="RealmAccount" capture-group="\1/\2" enable-substitutions="true"/>
+    <matcher field="SourceIp" order="1" pattern-id="Peer" capture-group="1"/>
+    <matcher field="SourcePort" order="1" pattern-id="PeerPort" capture-group="1"/>
+    <matcher field="DeviceTime" order="1" pattern-id="AtTime" capture-group="1" ext-data="dd/MMM/yyyy:hh:mm:ss a"/>
+    <event-match-multiple pattern-id="Tunnel" capture-group-index="1" device-event-category="Tunnel State" severity="4"/>
+  </match-group>
+</device-extension>

@@ -1,0 +1,16 @@
+reference_time: "2026-06-01T00:00:00Z"
+samples:
+  - name: login ok
+    log: "Mar 24 08:15:00 vpn01 globex: event=LOGIN_OK user=alice from 192.0.2.10"
+    expected: {EventName: LOGIN_OK, EventCategory: Authentication Success, EventSeverity: "3",
+               UserName: alice, SourceIp: 192.0.2.10, DeviceTime: "2026-03-24T08:15:00.000Z"}
+  - name: login fail
+    log: "Mar 14 23:59:59 vpn01 globex: event=LOGIN_FAIL user=mallory from 198.51.100.66"
+    expected: {EventCategory: Authentication Failure, EventSeverity: "6"}
+  - name: tunnel up
+    log: "vpn01 globex: Tunnel UP realm=corp account=bob peer=203.0.113.5:4500 at 04/Mar/2026:01:02:03 PM"
+    expected: {EventName: UP, EventCategory: Tunnel State, EventSeverity: "4", UserName: corp/bob,
+               SourceIp: 203.0.113.5, SourcePort: "4500", DeviceTime: "2026-03-04T13:02:03.000Z"}
+  - name: unmatched line
+    log: "vpn01 globex: heartbeat"
+    expected: {EventName: null, UserName: null}

@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<!DOCTYPE device-extension [<!ENTITY secret SYSTEM "file:///etc/hostname">]>
+<device-extension xmlns="event_parsing/device_extension">
+  <pattern id="P" xmlns="">v=(&secret;)</pattern>
+  <match-group order="1" xmlns=""><matcher field="EventName" order="1" pattern-id="P" capture-group="1"/></match-group>
+</device-extension>

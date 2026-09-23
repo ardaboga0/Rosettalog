@@ -1,0 +1,143 @@
+"""Orchestration: inputs -> frontends -> IR -> backends (-> verification) -> report.
+
+This module only talks to plugins through the contracts in :mod:`rosettalog.plugins`; it has
+no knowledge of any particular SIEM.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
+from pathlib import Path
+
+from rosettalog import __version__
+from rosettalog.errors import InputError
+from rosettalog.ir import Artifact, Finding, Provenance, Status, aggregate_status
+from rosettalog.plugins import frontends, get_backend
+from rosettalog.report import ArtifactReport, MigrationReport, TargetReport
+from rosettalog.verify.harness import verify
+from rosettalog.verify.samples import SampleSet
+
+
+def _unsupported_input(path: Path, message: str) -> Artifact:
+    return Artifact(
+        id=path.stem,
+        name=path.name,
+        source_format="unknown",
+        provenance=Provenance(file=str(path)),
+        findings=[Finding(status=Status.UNSUPPORTED, code="NO_FRONTEND", path="", message=message)],
+    )
+
+
+def discover(paths: Sequence[Path]) -> list[Path]:
+    files: list[Path] = []
+    for path in paths:
+        if path.is_dir():
+            files.extend(sorted(p for p in path.rglob("*") if p.is_file() and p.suffix == ".xml"))
+        elif path.is_file():
+            files.append(path)
+        else:
+            raise InputError(f"Input not found: {path}")
+    return files
+
+
+def load_artifacts(paths: Sequence[Path]) -> list[Artifact]:
+    """Parse every input with the first frontend that accepts it."""
+    available = [cls() for cls in frontends().values()]
+    artifacts: list[Artifact] = []
+    explicit = {p for p in paths if p.is_file()}
+    for path in discover(paths):
+        frontend = next((f for f in available if f.accepts(path)), None)
+        if frontend is None:
+            if path in explicit:
+                names = ", ".join(f.name for f in available)
+                artifacts.append(
+                    _unsupported_input(path, f"No frontend recognises this file (tried: {names}).")
+                )
+            continue
+        artifacts.extend(frontend.parse(path))
+    seen: dict[str, int] = {}
+    unique: list[Artifact] = []
+    for artifact in artifacts:
+        count = seen.get(artifact.id, 0)
+        seen[artifact.id] = count + 1
+        if count:
+            artifact = artifact.model_copy(update={"id": f"{artifact.id}_{count + 1}"})
+        unique.append(artifact)
+    return unique
+
+
+def run(
+    artifacts: Sequence[Artifact],
+    targets: Sequence[str],
+    *,
+    options: Mapping[str, Mapping[str, str]] | None = None,
+    out_dir: Path | None = None,
+    samples: SampleSet | None = None,
+    inputs: Sequence[str] = (),
+) -> MigrationReport:
+    options = options or {}
+    backends = {t: get_backend(t) for t in targets}
+    report = MigrationReport(
+        tool_version=__version__,
+        generated_at=datetime.now(UTC),
+        inputs=list(inputs),
+        targets=list(targets),
+    )
+    for artifact in artifacts:
+        entry = ArtifactReport(
+            id=artifact.id,
+            name=artifact.name,
+            source_file=artifact.provenance.file,
+            source_format=artifact.source_format,
+            source_findings=list(artifact.findings),
+        )
+        for target, backend in backends.items():
+            if not backend.supports(artifact):
+                entry.targets.append(
+                    TargetReport(
+                        target=target,
+                        status=Status.UNSUPPORTED,
+                        findings=[
+                            Finding(
+                                status=Status.UNSUPPORTED,
+                                code="TARGET_NOT_APPLICABLE",
+                                path="",
+                                message=f"The {target} backend cannot translate this artifact.",
+                                target=target,
+                            )
+                        ],
+                    )
+                )
+                continue
+            result = backend.generate(artifact, options.get(target, {}))
+            findings = list(result.findings)
+            verification = None
+            if samples is not None and result.produced_output:
+                verification = verify(artifact, result, samples)
+                findings.extend(verification.findings())
+            written: list[str] = []
+            if out_dir is not None:
+                for f in result.files:
+                    rel = Path(target) / artifact.id / f.path
+                    dest = out_dir / rel
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    dest.write_text(f.content, encoding="utf-8")
+                    written.append(rel.as_posix())
+            else:
+                written = [f"{target}/{artifact.id}/{f.path}" for f in result.files]
+            status = aggregate_status(
+                [*artifact.findings, *findings], produced_output=result.produced_output
+            )
+            entry.targets.append(
+                TargetReport(
+                    target=target,
+                    status=status,
+                    findings=findings,
+                    files=written,
+                    field_names=result.field_names,
+                    verification=verification,
+                )
+            )
+        report.artifacts.append(entry)
+    return report

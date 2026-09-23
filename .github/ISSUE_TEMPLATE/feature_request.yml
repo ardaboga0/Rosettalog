@@ -1,0 +1,15 @@
+name: Feature request
+description: Suggest an improvement that is not a new SIEM or a translation gap.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What migration task is hard today?
+    validations: {required: true}
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+    validations: {required: true}

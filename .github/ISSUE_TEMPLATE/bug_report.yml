@@ -1,0 +1,45 @@
+name: Bug report
+description: Rosettalog crashed or produced wrong output.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not paste real customer logs or vendor-shipped content.** Reduce the problem to a
+        minimal, synthetic reproduction (fictional vendor, 192.0.2.0/24 addresses).
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal synthetic input
+      description: The smallest LSX / sample that reproduces the problem.
+      render: xml
+    validations: {required: true}
+  - type: input
+    id: command
+    attributes:
+      label: Command
+      placeholder: rosettalog convert repro.xml --to sentinel
+    validations: {required: true}
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: Output, traceback, or the relevant part of report.md.
+    validations: {required: true}
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations: {required: true}
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `rosettalog --version` and `python --version`.
+  - type: checkboxes
+    id: policy
+    attributes:
+      label: Data policy
+      options:
+        - label: The content above is synthetic or from public documentation.
+          required: true

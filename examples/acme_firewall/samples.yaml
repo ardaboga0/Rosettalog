@@ -1,0 +1,42 @@
+# Synthetic sample events for the fictional Acme Firewall (see acme_fw.lsx.xml).
+# `expected` uses canonical (QRadar) field names; omit a field to skip checking it,
+# or set it to null to assert that it has no value.
+reference_time: "2026-06-01T00:00:00Z"
+samples:
+  - name: tcp deny
+    log: '<134>Mar 14 09:26:53 acme-fw01 AcmeFW[2211]: ts="2026-03-14 09:26:53.120" action=deny proto=TCP src=10.1.2.3 spt=51514 dst=203.0.113.10 dpt=443 user=alice cat="policy"'
+    expected:
+      EventName: deny
+      EventCategory: Firewall Deny
+      EventSeverity: "7"
+      SourceIp: 10.1.2.3
+      SourcePort: "51514"
+      DestinationIp: 203.0.113.10
+      DestinationPort: "443"
+      Protocol: TCP
+      UserName: alice
+      DeviceTime: "2026-03-14T09:26:53.120Z"
+      HostName: acme-fw01
+      SourceIpPostNAT: null
+
+  - name: udp allow with NAT
+    log: '<134>Mar 14 09:27:01 acme-fw01 AcmeFW[2211]: ts="2026-03-14 09:27:01.004" action=allow proto=udp src=10.1.2.9 spt=53000 dst=198.51.100.53 dpt=53 xlat=192.0.2.44:40001'
+    expected:
+      EventName: allow
+      EventCategory: Firewall Permit
+      Protocol: udp
+      SourceIpPostNAT: 192.0.2.44
+      SourcePortPostNAT: "40001"
+      UserName: null
+
+  - name: unknown action falls back to the cat= field
+    log: "<134>Mar 14 09:28:00 acme-fw02 AcmeFW[99]: ts=\"2026-03-14 09:28:00.500\" action=reset proto=tcp src=10.9.9.9 spt=1 dst=10.8.8.8 dpt=2 cat='session reset'"
+    expected:
+      EventName: reset
+      EventCategory: session reset
+
+  - name: vpn login identifies the user only via 'account:'
+    log: '<134>Mar 14 09:30:00 acme-fw01 AcmeFW[7]: ts="2026-03-14 09:30:00.000" action=login account: bob.smith src=10.1.2.3'
+    expected:
+      EventName: login
+      UserName: bob.smith

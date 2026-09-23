@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic LSX exercising elements the translator must refuse or flag. Written for tests. -->
+<device-extension xmlns="event_parsing/device_extension">
+  <pattern id="Name" xmlns=""><![CDATA[name=(\w+)]]></pattern>
+  <pattern id="Name" xmlns=""><![CDATA[duplicate=(\w+)]]></pattern>
+  <pattern id="Spaced" trim-whitespace="true" xmlns=""><![CDATA[a b=(\d+)]]></pattern>
+  <pattern id="Broken" xmlns=""><![CDATA[(unclosed]]></pattern>
+  <pattern id="Posix" xmlns=""><![CDATA[code=(\p{Alpha}+)]]></pattern>
+  <pattern id="Weird" frobnicate="yes" xmlns=""><![CDATA[x=(\d)]]></pattern>
+  <pattern id="Time" xmlns=""><![CDATA[t=(\S+)]]></pattern>
+
+  <match-group order="1" description="edge" device-type-id-override="42" xmlns="">
+    <matcher field="EventName" order="1" pattern-id="Name" capture-group="1"/>
+    <matcher field="SourceIp" order="1" pattern-id="Missing" capture-group="1"/>
+    <matcher field="DestinationIp" order="1" pattern-id="Name" capture-group="5"/>
+    <matcher field="UserName" order="1" pattern-id="Broken" capture-group="1"/>
+    <matcher field="Protocol" order="1" pattern-id="Posix" capture-group="1"/>
+    <matcher field="HostName" order="1" pattern-id="Spaced" capture-group="1" ext-data="ignored"/>
+    <matcher field="DeviceTime" order="1" pattern-id="Time" capture-group="1"/>
+    <matcher field="MyCustomField" order="1" pattern-id="Weird" capture-group="1"/>
+    <matcher field="GroupName" order="1" pattern-id="Name" capture-group="abc"/>
+    <json-matcher field="SourcePort" order="1" pattern-id="Name"/>
+    <mystery-element/>
+    <event-match-single event-name="x" device-event-category="c" severity="99" send-identity="OverrideAndAlwaysSend"/>
+  </match-group>
+  <unknown-top-level/>
+</device-extension>

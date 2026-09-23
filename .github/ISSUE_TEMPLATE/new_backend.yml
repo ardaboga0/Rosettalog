@@ -1,0 +1,32 @@
+name: New source or target SIEM
+description: Propose support for another SIEM (frontend or backend).
+labels: [enhancement, plugin]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options: [Backend (target SIEM), Frontend (source format)]
+    validations: {required: true}
+  - type: input
+    id: platform
+    attributes:
+      label: Platform and artifact type
+      placeholder: Elastic ingest pipelines (grok/dissect)
+    validations: {required: true}
+  - type: textarea
+    id: mapping
+    attributes:
+      label: How IR concepts map
+      description: Regex engine, fallback/coalesce, lookups, timestamp parsing, field taxonomy (e.g. ECS).
+  - type: textarea
+    id: verification
+    attributes:
+      label: Local emulation / verification approach
+      description: Is there a Python binding for the regex engine? Can the output be interpreted locally?
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to implement this (see CONTRIBUTING.md, "Adding a new backend").

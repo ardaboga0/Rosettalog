@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic Log Source Extension for the fictional "Acme Firewall".
+  Written from scratch for Rosettalog; it contains no vendor-shipped content.
+
+  Deliberate translation challenges:
+    * UserName order 2 uses a lookbehind      -> not expressible in RE2 (Sentinel KQL)
+    * EventCategory uses a backreference      -> not expressible in RE2 (Sentinel KQL)
+    * HostName has no ASIM/CIM equivalent      -> emitted under its original name, flagged
+-->
+<device-extension xmlns="event_parsing/device_extension">
+
+  <pattern id="Action" xmlns=""><![CDATA[action=(\w+)]]></pattern>
+  <pattern id="SrcIp" xmlns=""><![CDATA[\bsrc=(\d{1,3}(?:\.\d{1,3}){3})]]></pattern>
+  <pattern id="SrcPort" xmlns=""><![CDATA[\bspt=(\d{1,5})]]></pattern>
+  <pattern id="DstIp" xmlns=""><![CDATA[\bdst=(\d{1,3}(?:\.\d{1,3}){3})]]></pattern>
+  <pattern id="DstPort" xmlns=""><![CDATA[\bdpt=(\d{1,5})]]></pattern>
+  <pattern id="Proto" case-insensitive="true" xmlns=""><![CDATA[proto=(tcp|udp|icmp)]]></pattern>
+  <pattern id="User" xmlns=""><![CDATA[\buser=(?<user>[^\s"]+)]]></pattern>
+  <pattern id="AccountFallback" xmlns=""><![CDATA[(?<=account: )[\w.\\-]+]]></pattern>
+  <pattern id="Nat" xmlns=""><![CDATA[xlat=(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})]]></pattern>
+  <pattern id="Timestamp" xmlns=""><![CDATA[ts="([^"]+)"]]></pattern>
+  <pattern id="Host" xmlns=""><![CDATA[^<\d+>\w{3} +\d{1,2} [\d:]{8} (\S+)]]></pattern>
+  <pattern id="Category" xmlns=""><![CDATA[cat=(['"])(.*?)\1]]></pattern>
+
+  <match-group order="1" description="Acme Firewall traffic events" xmlns="">
+    <matcher field="EventName" order="1" pattern-id="Action" capture-group="1"/>
+    <matcher field="EventCategory" order="1" pattern-id="Category" capture-group="2"/>
+    <matcher field="SourceIp" order="1" pattern-id="SrcIp" capture-group="1"/>
+    <matcher field="SourcePort" order="1" pattern-id="SrcPort" capture-group="1"/>
+    <matcher field="DestinationIp" order="1" pattern-id="DstIp" capture-group="1"/>
+    <matcher field="DestinationPort" order="1" pattern-id="DstPort" capture-group="1"/>
+    <matcher field="Protocol" order="1" pattern-id="Proto" capture-group="1"/>
+    <matcher field="UserName" order="1" pattern-id="User" capture-group="1"/>
+    <matcher field="UserName" order="2" pattern-id="AccountFallback" capture-group="0"/>
+    <matcher field="SourceIpPostNAT" order="1" pattern-id="Nat" capture-group="1"/>
+    <matcher field="SourcePortPostNAT" order="1" pattern-id="Nat" capture-group="2"/>
+    <matcher field="DeviceTime" order="1" pattern-id="Timestamp" capture-group="1"
+             ext-data="yyyy-MM-dd HH:mm:ss.SSS"/>
+    <matcher field="HostName" order="1" pattern-id="Host" capture-group="1"/>
+
+    <event-match-single event-name="deny" device-event-category="Firewall Deny" severity="7"/>
+    <event-match-single event-name="allow" device-event-category="Firewall Permit" severity="3"/>
+  </match-group>
+
+</device-extension>

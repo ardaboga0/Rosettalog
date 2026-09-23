@@ -1,0 +1,34 @@
+name: Translation gap
+description: A construct is reported PARTIAL/UNSUPPORTED (or wrongly FULL) and you know the correct translation.
+labels: [translation-gap]
+body:
+  - type: dropdown
+    id: target
+    attributes:
+      label: Target
+      options: [sentinel, splunk, other / new target]
+    validations: {required: true}
+  - type: input
+    id: code
+    attributes:
+      label: Finding code
+      placeholder: RE2_NO_LOOKAROUND
+  - type: textarea
+    id: source
+    attributes:
+      label: Synthetic source snippet
+      render: xml
+    validations: {required: true}
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed translation and why it is equivalent
+      description: Include sample log lines that demonstrate equivalence if possible.
+    validations: {required: true}
+  - type: checkboxes
+    id: policy
+    attributes:
+      label: Data policy
+      options:
+        - label: The content above is synthetic or from public documentation.
+          required: true
