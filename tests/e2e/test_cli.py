@@ -68,7 +68,7 @@ def test_verify_exit_codes() -> None:
         ],
     )
     assert fails.exit_code == 2
-    assert "UserName: qradar='bob.smith' sentinel=None" in fails.output
+    assert "UserName: qradar='bob.smith' sentinel-emulator=None" in fails.output
     passes = runner.invoke(
         app,
         [

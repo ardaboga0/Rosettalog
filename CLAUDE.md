@@ -60,6 +60,16 @@ core value is migrating *parsing logic* with honest findings and field-level ver
 7. **Deployment scope.** Every generated setting is declared in `BackendResult.settings` as
    index-time, search-time or query-time. A translated field that depends on index-time
    configuration needs a finding (e.g. `SPLUNK_INDEX_TIME_DEPENDENCY`).
+8. **Real engines are opt-in and local.** Real-engine runners (`rosettalog.verify.real`, group
+   `rosettalog.runners`) must pin their image, publish ports on 127.0.0.1 only, label containers
+   `rosettalog.verify=1`, and always remove them. Only the synthetic samples being verified may
+   be sent to an engine. Nothing leaves the machine unless the user explicitly configures a
+   remote service (e.g. ADX). Default tests and CI never need Docker:
+   `@pytest.mark.real_engine` tests are skipped unless `--real-engine` is given.
+9. **Emulator divergences.** When a target emulator disagrees with the real engine, fix the
+   emulator (or the backend, if the real engine rejects our output) and add a container-free
+   regression test to `tests/unit/test_emulator_regressions.py` that names the engine version
+   and sample.
 
 ## Layout
 
@@ -70,8 +80,11 @@ core value is migrating *parsing logic* with honest findings and field-level ver
   `python`; returns the pattern plus issues).
 - `src/rosettalog/timefmt/joda.py`: Joda-Time `ext-data` formats → regex, strptime, parse.
 - `src/rosettalog/frontends/qradar_lsx/`: LSX → IR (hardened lxml parser).
-- `src/rosettalog/backends/{sentinel,splunk}/`: IR → KQL / props+transforms. `common.py` holds
-  shared helpers.
+- `src/rosettalog/backends/{sentinel,splunk,elastic}/`: IR → KQL / props+transforms / ingest
+  pipeline JSON. `common.py` holds shared helpers.
+- `src/rosettalog/regex/grok.py`, `onig_emulation.py`: grok patterns (Oniguruma, Ruby syntax)
+  and their Python emulation. `src/rosettalog/timefmt/javatime.py`: Joda → java.time.
+- `src/rosettalog/verify/real/`: opt-in real-engine runners and `docker.py`.
 - `src/rosettalog/verify/`: `samples.py`, `harness.py`, `emulators/` (`source.py` evaluates the IR;
   `kql.py` and `splunk.py` interpret the generated output; `pcre.py` converts PCRE for the
   `regex` module).

@@ -7,6 +7,7 @@ no knowledge of any particular SIEM.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from contextlib import ExitStack
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -14,7 +15,14 @@ from rosettalog import __version__
 from rosettalog.errors import InputError
 from rosettalog.ir import Artifact, Finding, Provenance, Status, aggregate_status
 from rosettalog.ir.assumptions import Assumption, AssumptionSet
-from rosettalog.plugins import frontends, get_backend
+from rosettalog.plugins import (
+    Backend,
+    RealEngineSession,
+    frontends,
+    get_backend,
+    get_runner,
+    runners,
+)
 from rosettalog.report import ArtifactReport, MigrationReport, TargetReport
 from rosettalog.verify.harness import verify
 from rosettalog.verify.samples import SampleSet, ground_truth_problems
@@ -89,6 +97,8 @@ def run(
     out_dir: Path | None = None,
     samples: SampleSet | None = None,
     require_ground_truth: bool = False,
+    engine: str = "emulator",
+    runner_names: Sequence[str] = (),
     inputs: Sequence[str] = (),
 ) -> MigrationReport:
     """Translate ``artifacts`` for every target.
@@ -97,6 +107,10 @@ def run(
     parser produces plus a ``ground_truth_source``; otherwise :class:`InputError` is raised.
     """
     options = options or {}
+    if engine not in ("emulator", "real"):
+        raise InputError(f"Unknown engine '{engine}'; use 'emulator' or 'real'.")
+    if engine == "real" and samples is None:
+        raise InputError("--engine real needs a samples file.")
     if require_ground_truth:
         if samples is None:
             raise InputError("--require-ground-truth needs a samples file.")
@@ -109,6 +123,40 @@ def run(
         if problems:
             raise InputError("Samples are not usable as ground truth:\n  " + "\n  ".join(problems))
     backends = {t: get_backend(t) for t in targets}
+    with ExitStack() as stack:
+        sessions = _open_sessions(stack, targets, runner_names) if engine == "real" else {}
+        return _run(artifacts, backends, options, out_dir, samples, sessions, inputs)
+
+
+def _open_sessions(
+    stack: ExitStack, targets: Sequence[str], runner_names: Sequence[str]
+) -> dict[str, RealEngineSession]:
+    chosen: dict[str, str] = {}
+    for name in runner_names:
+        cls = runners().get(name)
+        if cls is None:
+            raise InputError(f"Unknown runner '{name}'. Available: {', '.join(sorted(runners()))}.")
+        chosen[cls.target] = name
+    sessions: dict[str, RealEngineSession] = {}
+    for target in targets:
+        runner = get_runner(target, chosen.get(target))
+        reason = runner.unavailable_reason()
+        if reason is not None:
+            raise InputError(f"Real-engine runner '{runner.name}' cannot run here: {reason}")
+        sessions[target] = stack.enter_context(runner.session())
+    return sessions
+
+
+def _run(
+    artifacts: Sequence[Artifact],
+    backends: Mapping[str, Backend],
+    options: Mapping[str, Mapping[str, str]],
+    out_dir: Path | None,
+    samples: SampleSet | None,
+    sessions: Mapping[str, RealEngineSession],
+    inputs: Sequence[str],
+) -> MigrationReport:
+    targets = list(backends)
     report = MigrationReport(
         tool_version=__version__,
         generated_at=datetime.now(UTC),
@@ -145,7 +193,7 @@ def run(
             findings = list(result.findings)
             verification = None
             if samples is not None and result.produced_output:
-                verification = verify(artifact, result, samples)
+                verification = verify(artifact, result, samples, sessions.get(target))
                 findings.extend(verification.findings())
             written: list[str] = []
             if out_dir is not None:

@@ -1,0 +1,30 @@
+name: Real-engine verification
+
+# Opt-in, container-based differential tests: generated content runs on the real target engines
+# and is compared with the local emulators. Default CI (ci.yml) stays container-free.
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: "Comma-separated targets (elastic, splunk, sentinel)"
+        required: false
+        default: "elastic,splunk,sentinel"
+  schedule:
+    - cron: "17 3 * * 1" # weekly, Monday 03:17 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  elastic:
+    if: github.event_name == 'schedule' || contains(github.event.inputs.targets, 'elastic')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+      # Image pinned in src/rosettalog/verify/real/elastic.py
+      - run: uv run pytest -m real_engine --real-engine --real-targets elastic -ra

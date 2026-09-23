@@ -9,7 +9,8 @@
 > [!IMPORTANT]
 > **Pre-release (0.1.0.dev0), not yet published to PyPI.** Rosettalog currently migrates
 > **parsing logic only**: QRadar **Log Source Extensions** → **Microsoft Sentinel** (KQL parser
-> functions, ASIM names) and **Splunk** (props.conf / transforms.conf, CIM names). It does not
+> functions, ASIM names), **Splunk** (props.conf / transforms.conf, CIM names) and **Elastic**
+> (ingest pipelines, ECS names). It does not
 > translate rules or AQL queries; for those it will integrate with existing converters (see the
 > [roadmap](#roadmap)).
 >
@@ -62,9 +63,9 @@ Requires Python 3.11+.
 git clone https://github.com/ardaboga0/rosettalog.git && cd rosettalog
 uv sync                      # or: pip install -e .
 
-# Translate the bundled synthetic example to both targets, verifying against sample logs
+# Translate the bundled synthetic example to all targets, verifying against sample logs
 uv run rosettalog convert examples/acme_firewall/acme_fw.lsx.xml \
-    --to sentinel --to splunk --sourcetype acme:firewall \
+    --to sentinel --to splunk --to elastic --sourcetype acme:firewall \
     --samples examples/acme_firewall/samples.yaml -o out/
 ```
 
@@ -72,6 +73,7 @@ uv run rosettalog convert examples/acme_firewall/acme_fw.lsx.xml \
 acme_fw.lsx
   sentinel   PARTIAL     8 item(s) need review, samples 2/4
   splunk     PARTIAL     2 item(s) need review, samples 4/4
+  elastic    PARTIAL     3 item(s) need review, samples 4/4
 ```
 
 `out/` now contains:
@@ -81,13 +83,14 @@ out/
 ├── report.md                                  ← start here
 ├── report.json                                ← machine-readable (`rosettalog schema`)
 ├── sentinel/acme_fw_lsx/AcmeFwLsxParser.kql
-└── splunk/acme_fw_lsx/{props.conf,transforms.conf}
+├── splunk/acme_fw_lsx/{props.conf,transforms.conf}
+└── elastic/acme_fw_lsx/rosettalog-acme-fw-lsx.json   ← ingest pipeline
 ```
 
 The report explains, for example, that the example's `UserName` fallback pattern uses a
 lookbehind. RE2, which KQL uses, cannot express a lookbehind, so the KQL parser drops that
 fallback. The sample that depends on it then fails verification for Sentinel and passes for
-Splunk.
+Splunk and Elastic (grok's Oniguruma supports fixed-width lookbehind).
 
 ### Your own content
 
@@ -95,6 +98,7 @@ Splunk.
 rosettalog convert my_extensions/ --to sentinel --source-table MyDevice_CL --message-column RawData
 rosettalog verify my_lsx.xml --samples my_samples.yaml --to splunk   # exit 2 on any mismatch
 rosettalog verify ... --require-ground-truth   # every sample needs full `expected` + source
+rosettalog verify ... --to elastic --engine real   # also run on the real engine (Docker)
 rosettalog inspect my_lsx.xml      # dump the vendor-neutral IR
 rosettalog plugins                 # installed sources/targets and their -O options
 rosettalog convert ... --strict    # exit 2 unless everything is FULL (useful in CI)
@@ -114,7 +118,8 @@ QRadar LSX ─► frontend ─► IR + findings ─► backend ─► target con
 - **Findings.** Every approximation or gap is a finding with a stable code, for example
   `RE2_NO_LOOKAROUND` or `LSX_MATCHGROUP_SELECTION_ASSUMED`. See
   [docs/findings-codes.md](docs/findings-codes.md).
-- **Regex dialects.** Java regexes are tokenized and re-emitted for RE2 or PCRE. Every construct
+- **Regex dialects.** Java regexes are tokenized and re-emitted for RE2, PCRE or Oniguruma
+  (Elastic grok). Every construct
   that differs between them is reported. See the
   [support matrix](docs/lsx-support-matrix.md).
 - **Verification.** Emulators run the *generated* KQL (on real RE2) and the *generated* .conf
@@ -122,6 +127,10 @@ QRadar LSX ─► frontend ─► IR + findings ─► backend ─► target con
   with your `expected` values. Each sample records its `ground_truth_source` ("observed on
   QRadar", "derived from IBM docs" or "assumed"), and the report shows it. See
   [docs/verification.md](docs/verification.md).
+- **Real engines (opt-in).** `--engine real` also runs the generated content on the real target
+  engine in a local container and compares four ways: QRadar (emulated), target emulator, real
+  engine and expected. When the emulator and the real engine disagree, that is reported as an
+  emulator bug. Default runs and CI never need Docker.
 - **Assumptions are testable.** Where IBM's documentation is ambiguous, Rosettalog states its
   assumption, and every report lists the global ones that are still unconfirmed.
   [`examples/confirmation/`](examples/confirmation/README.md) provides a minimal LSX plus
@@ -139,7 +148,7 @@ QRadar LSX ─► frontend ─► IR + findings ─► backend ─► target con
 | M1 ✅ | LSX → Sentinel KQL + Splunk props/transforms, report, verification harness |
 | M2 | AQL: a documented integration point plus an optional adapter that hands queries to an external translator (e.g. Uncoder) and records its output and gaps as findings. No AQL grammar of our own. |
 | M3 | QRadar custom rules and building blocks → IR detection model → **Sigma** only; target conversion is delegated to pySigma |
-| M4 | Elastic ingest pipelines; opt-in verification against real Splunk / ADX |
+| M4 | Elastic ingest pipelines ✅ (M4a); opt-in verification against real engines: Elasticsearch ✅, Splunk, Kusto emulator / ADX |
 | M5 | Cortex XSIAM (XQL parsing rules) |
 
 ## Contributing

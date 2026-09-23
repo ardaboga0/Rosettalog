@@ -81,3 +81,58 @@ def test_all_targets_agree_on_simple_patterns(pattern: str) -> None:
     assert (m1 is None) == (m2 is None)
     if m1 is not None and m2 is not None:
         assert m1.group(0) == m2.group(0)
+
+
+@pytest.mark.parametrize(
+    ("pattern", "status", "code", "expected"),
+    [
+        (r"src=(\d+)", Status.FULL, None, r"src=([0-9]+)"),
+        (r"\w\s\W", Status.FULL, None, r"[a-zA-Z0-9_][ \t\n\x0B\f\r][^a-zA-Z0-9_]"),
+        (r"^a$", Status.FULL, None, r"\Aa\Z"),
+        (r"(?m)^a$", Status.PARTIAL, "ONIG_MULTILINE_ANCHORS", "^a$"),
+        (r"(?s)a.b", Status.FULL, None, "(?m)a.b"),
+        (r"\bx\B", Status.FULL, None, None),
+        (r"\h", Status.FULL, None, None),
+        (r"a\R", Status.FULL, None, r"a(?>\r\n|[\n-\r\x{85}\x{2028}-\x{2029}])"),
+        (r"100%", Status.FULL, None, r"100\x{25}"),
+        (r"(?<=a)b", Status.FULL, None, "(?<=a)b"),
+        (r"(?<=a|bc)b", Status.FULL, None, "(?<=a|bc)b"),
+        (r"(?<=a+)b", Status.UNSUPPORTED, "ONIG_LOOKBEHIND_NOT_FIXED", None),
+        (r"(?<=(?:a|bc))b", Status.UNSUPPORTED, "ONIG_LOOKBEHIND_NOT_FIXED", None),
+        (r"(a)\1", Status.FULL, None, r"(a)\k<1>"),
+        (r"a++(?>b)", Status.FULL, None, "a++(?>b)"),
+        (r"[\d\W]", Status.FULL, None, "[0-9[^a-zA-Z0-9_]]"),
+        (r"[^\W]", Status.UNSUPPORTED, "REGEX_CLASS_SET_OPERATION", None),
+        (r"\Qa.b\E", Status.FULL, None, r"a\.b"),
+    ],
+)
+def test_onig_translation(pattern, status, code, expected) -> None:
+    result = translate(pattern, "onig")
+    assert result.status is status
+    if code:
+        assert code in {i.code for i in result.issues}
+    if expected is not None:
+        assert result.pattern == expected
+    if result.pattern is not None:
+        assert "\\h" not in result.pattern
+        assert "\\d" not in result.pattern
+        assert "\\b" not in result.pattern
+
+
+def test_onig_output_behaves_like_java_on_ascii_input() -> None:
+    import regex
+
+    from rosettalog.regex.onig_emulation import compile_onig
+
+    cases = [
+        (r"\bsrc=(\d+)\b", "a src=12 b", "12"),
+        (r"^<(\d+)>", "<134>x", "134"),
+        (r"(\w+)$", "abc def", "def"),
+        (r"x(\s+)y", "x \t y", " \t "),
+    ]
+    for java, text, group in cases:
+        onig = translate(java, "onig").pattern
+        py = translate(java, "python").pattern
+        assert onig is not None
+        assert py is not None
+        assert compile_onig(onig).search(text).group(1) == regex.search(py, text).group(1) == group

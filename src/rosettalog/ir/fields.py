@@ -11,7 +11,7 @@ import yaml
 
 from rosettalog.ir.findings import Finding, Status
 
-Taxonomy = Literal["asim", "cim"]
+Taxonomy = Literal["asim", "cim", "ecs"]
 
 #: Synthetic canonical field produced from event severity mappings (not a QRadar matcher field).
 EVENT_SEVERITY = "EventSeverity"

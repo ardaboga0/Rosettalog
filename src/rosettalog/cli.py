@@ -11,7 +11,7 @@ from rosettalog import __version__
 from rosettalog.errors import RosettalogError
 from rosettalog.ir import Status
 from rosettalog.pipeline import load_artifacts, run
-from rosettalog.plugins import backends, emulators, frontends
+from rosettalog.plugins import backends, emulators, frontends, runners
 from rosettalog.report import MigrationReport, json_schema_text, render_json, render_markdown
 from rosettalog.verify.samples import load_samples
 
@@ -55,6 +55,22 @@ RequireGroundTruth = Annotated[
         "--require-ground-truth",
         help="Fail unless every sample has 'expected' values for all fields and a "
         "'ground_truth_source'.",
+    ),
+]
+EngineOpt = Annotated[
+    str,
+    typer.Option(
+        "--engine",
+        help="'emulator' (default, local only) or 'real': also run the generated content on the "
+        "real target engine (local container, see docs/verification.md) and compare.",
+    ),
+]
+RunnerOpt = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--runner",
+        help="Real-engine runner to use instead of the target's default, e.g. sentinel-adx. "
+        "Repeatable. See `rosettalog plugins`.",
     ),
 ]
 SamplesOpt = Annotated[
@@ -196,6 +212,8 @@ def verify(
     asim_schema: AsimSchema = None,
     sourcetype: Sourcetype = None,
     require_ground_truth: RequireGroundTruth = False,
+    engine: EngineOpt = "emulator",
+    runner: RunnerOpt = None,
     report_md: Annotated[
         Path | None, typer.Option("--report", help="Also write a Markdown report here.")
     ] = None,
@@ -216,6 +234,8 @@ def verify(
             options=opts,
             samples=load_samples(samples),
             require_ground_truth=require_ground_truth,
+            engine=engine,
+            runner_names=runner or [],
             inputs=[str(p) for p in inputs],
         )
     except RosettalogError as exc:
@@ -234,17 +254,22 @@ def verify(
                 f"{artifact.name} -> {tr.target}: {v.passed}/{v.total} samples match "
                 f"(ground truth: {truth})"
             )
-            if v.error:
-                typer.secho(f"  emulation error: {v.error}", fg=typer.colors.RED)
-                failed = True
+            if v.real_engine:
+                typer.echo(f"  real engine: {v.real_engine}")
+            for label, error in (("emulation", v.error), ("real engine", v.real_error)):
+                if error:
+                    typer.secho(f"  {label} error: {error}", fg=typer.colors.RED)
+                    failed = True
             for sample in v.samples:
                 for c in sample.checks:
                     if not c.ok:
                         failed = True
                         exp = f" expected={c.expected!r}" if c.has_expected else ""
+                        real = f" real={c.real!r}" if c.has_real else ""
+                        tag = " [EMULATOR DIVERGES FROM REAL ENGINE]" if c.emulator_diverges else ""
                         typer.echo(
                             f"  [{sample.name}] {c.field}: qradar={c.source!r} "
-                            f"{tr.target}={c.target!r}{exp}"
+                            f"{tr.target}-emulator={c.target!r}{real}{exp}{tag}"
                         )
     if report_md:
         report_md.write_text(render_markdown(report), encoding="utf-8")
@@ -278,6 +303,9 @@ def plugins() -> None:
     typer.echo("Emulators (verification):")
     for name, em in sorted(emulators().items()):
         typer.echo(f"  {name:<12} {em.engine_note}")
+    typer.echo("Real-engine runners (verify --engine real):")
+    for name, rn in sorted(runners().items()):
+        typer.echo(f"  {name:<12} target={rn.target}  {rn.image}")
 
 
 @app.command()

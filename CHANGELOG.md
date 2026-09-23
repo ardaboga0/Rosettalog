@@ -8,6 +8,27 @@ All notable changes to this project are documented here. The format follows
 
 No release has been tagged yet.
 
+### Added (M4a)
+- Elastic backend: Elasticsearch ingest pipeline (grok, set, date, remove) with ECS field names
+  (new `ecs` column in `field_map.yaml`).
+- `onig` regex dialect for Elastic grok (Oniguruma, Ruby syntax) with explicit ASCII classes,
+  lookaround-based `\b`, and rejection of non-fixed-width lookbehind
+  (`ONIG_LOOKBEHIND_NOT_FIXED`).
+- Joda → java.time date conversion for the `date` processor, with findings for case-sensitive
+  text fields and fixed-width numeric fields.
+- Elastic emulator (grok/set/date/remove, strict Painless-condition subset).
+- Opt-in real-engine verification: `rosettalog verify --engine real`, `RealEngineRunner` plugins,
+  the Elasticsearch 9.5.4 runner (`_simulate` API), a four-way comparison in the report, the
+  `@pytest.mark.real_engine` differential suite, and the weekly/manual
+  `real-engines.yml` workflow.
+- New findings: `VERIFY_REAL_MISMATCH`, `VERIFY_EMULATOR_DIVERGENCE`, `VERIFY_REAL_ENGINE_ERROR`,
+  `VERIFY_REAL_NOT_COMPARABLE`, `ELASTIC_*` and `ONIG_*`.
+
+### Fixed (M4a)
+- The Elastic backend no longer sets `locale: ENGLISH` on date processors. Elasticsearch 9.5.4
+  rejects that literal although the docs name it as the default; this was found by the first
+  differential run and has a regression test.
+
 ### Changed
 - Roadmap re-scoped. M2 is now an integration point plus an optional adapter for external AQL
   translators (no AQL grammar). M3 is QRadar rules → Sigma only, with pySigma for targets.
