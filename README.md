@@ -1,6 +1,39 @@
 # Rosettalog
 
-**Move your QRadar detection content to another SIEM, and know exactly what did not make it.**
+[![CI](https://github.com/ardaboga0/rosettalog/actions/workflows/ci.yml/badge.svg)](https://github.com/ardaboga0/rosettalog/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
+
+**Move your QRadar parsing logic to another SIEM, and know exactly what did not make it.**
+
+> [!IMPORTANT]
+> **Pre-release (0.1.0.dev0), not yet published to PyPI.** Rosettalog currently migrates
+> **parsing logic only**: QRadar **Log Source Extensions** → **Microsoft Sentinel** (KQL parser
+> functions, ASIM names) and **Splunk** (props.conf / transforms.conf, CIM names). It does not
+> translate rules or AQL queries; for those it will integrate with existing converters (see the
+> [roadmap](#roadmap)).
+>
+> **Some LSX semantics are unconfirmed assumptions.** IBM's documentation leaves some behaviour
+> open, for example how several match groups are selected, or whether an empty capture falls
+> back to the next matcher. Rosettalog's assumptions are listed in the
+> [support matrix](docs/lsx-support-matrix.md#assumed-behaviours-awaiting-qradar-ce-confirmation),
+> and **every migration report lists the unconfirmed global ones** in its own section.
+
+### Help confirm QRadar's behaviour
+
+If you have access to **QRadar Community Edition**, you can settle these assumptions. Each
+[confirmation case](examples/confirmation/README.md) is a tiny synthetic LSX plus a few syslog
+lines:
+
+1. Upload `extension.xml` and attach it to a Universal DSM log source.
+2. Send `sample.log` with `examples/confirmation/send.sh`.
+3. Note what QRadar extracts.
+
+Report your results in an issue using
+[`RESULTS-TEMPLATE.md`](examples/confirmation/RESULTS-TEMPLATE.md), with your QRadar version.
+Even a single confirmed case helps.
+
+## What it does
 
 Rosettalog is an open-source, community-driven migration toolkit for SOC and detection
 engineering teams leaving IBM QRadar. It parses QRadar artifacts into a vendor-neutral
@@ -15,18 +48,11 @@ pluggable backends. Every translation gets one of three statuses:
 
 A trustworthy partial result beats a wrong complete one.
 
-**Parsing migration first; integrate with, don't duplicate, rule converters.** Rosettalog's
-focus is migrating *parsing logic* (log source extensions and field extraction), with honest
-findings and field-level verification against sample logs. Existing open-source projects already
-handle rule and query translation (for example Uncoder.io, pySigma and ARuleCon). Rosettalog
-integrates with them instead of competing: AQL queries go to an external translator whose gaps
-are recorded as findings, and QRadar rules are exported to Sigma so that pySigma converts them
-to target queries.
-
-> Status: **alpha** (milestone M1). Supported today: QRadar **Log Source Extensions** →
-> **Microsoft Sentinel** (KQL parser functions, ASIM field names) and **Splunk**
-> (props.conf / transforms.conf, CIM field names). Integration with rule and query converters
-> is on the [roadmap](#roadmap).
+**Parsing migration first; integrate with, don't duplicate, rule converters.** Existing
+open-source projects already handle rule and query translation (for example Uncoder.io, pySigma
+and ARuleCon). Rosettalog will integrate with them instead of competing: AQL queries will go to
+an external translator whose gaps are recorded as findings, and QRadar rules will be exported to
+Sigma so that pySigma converts them to target queries.
 
 ## Quickstart
 
@@ -118,7 +144,8 @@ QRadar LSX ─► frontend ─► IR + findings ─► backend ─► target con
 
 ## Contributing
 
-New backends, frontends, test fixtures and bug reports are welcome. Please read
+New backends, frontends, test fixtures and bug reports are welcome, and so are QRadar CE
+results for the [confirmation cases](examples/confirmation/README.md). Please read
 [CONTRIBUTING.md](CONTRIBUTING.md). It includes a step-by-step guide for adding a target SIEM,
 and the fixture policy: **synthetic or public-documentation content only, never vendor-shipped
 DSMs or real customer logs.**
