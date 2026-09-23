@@ -15,6 +15,11 @@ All notable changes to this project are documented here. The format follows
 - `SPLUNK_INDEX_TIME_SETTINGS` (FULL note) is replaced by `SPLUNK_INDEX_TIME_DEPENDENCY`
   (PARTIAL: `_time` depends on index-time settings that only affect newly indexed data).
 
+- The Globex test fixture is renamed to Tessivor (an invented vendor name; "Globex" is a real
+  trading platform).
+- The fixture IP policy now allows RFC 5737 and RFC 1918 addresses, plus `0.0.0.0` where it has
+  a documented meaning. A test enforces it.
+
 ### Fixed
 - Splunk: with several match groups, a field extracted only by a later group was applied even
   when an earlier group had been selected. Found by confirmation case 01.
@@ -26,7 +31,10 @@ All notable changes to this project are documented here. The format follows
   query-time, and the report lists them in separate sections.
 - New findings: `SPLUNK_INDEX_TIME_DEPENDENCY`, `SPLUNK_EVENT_BREAKING_ASSUMED`,
   `VERIFY_UNKNOWN_EXPECTED_FIELD`.
-- `examples/confirmation/`: 15 minimal QRadar CE cases, one per assumed LSX behaviour.
+- `examples/confirmation/`: 15 minimal QRadar CE cases covering 16 assumed LSX behaviours.
+- Assumption registry (`frontends/qradar_lsx/assumptions.yaml`). Every report has a top-level
+  "Unconfirmed global assumptions" section (MD + JSON), and the doc tables are generated from
+  the same file.
 - Vendor-neutral IR for regex-based parsers, with findings (FULL / PARTIAL / UNSUPPORTED).
 - QRadar Log Source Extension (LSX) frontend: patterns, match groups, matchers (order,
   capture groups, substitutions, Joda `ext-data` timestamps), event-match-single/multiple.

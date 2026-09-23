@@ -5,8 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import ClassVar
 
+from rosettalog.frontends.qradar_lsx.assumptions import lsx_assumptions
 from rosettalog.frontends.qradar_lsx.parser import LsxParser, is_lsx
 from rosettalog.ir import Artifact
+from rosettalog.ir.assumptions import AssumptionSet
 
 
 class QRadarLsxFrontend:
@@ -18,6 +20,9 @@ class QRadarLsxFrontend:
 
     def parse(self, path: Path) -> list[Artifact]:
         return [LsxParser(path).parse()]
+
+    def assumptions(self) -> AssumptionSet:
+        return lsx_assumptions()
 
 
 __all__ = ["QRadarLsxFrontend"]

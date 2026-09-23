@@ -119,6 +119,32 @@ def _artifact(a: ArtifactReport) -> list[str]:
     return lines
 
 
+def _assumptions(report: MigrationReport) -> list[str]:
+    items = report.unconfirmed_global_assumptions
+    if not items:
+        return []
+    lines = [
+        "## Unconfirmed global assumptions",
+        "",
+        "These assumptions about the source SIEM apply to **every** artifact above. They are not "
+        "reported per artifact. Each one has a minimal confirmation case (LSX plus sample logs) to "
+        "run on the source SIEM. An assumption leaves this list once it is confirmed.",
+        "",
+        "| ID | Status | Question | Current assumption | Confirmation case |",
+        "|---|---|---|---|---|",
+    ]
+    for a in items:
+        status = (
+            "**REFUTED**: output known to differ, fix pending"
+            if a.status == "refuted"
+            else (a.status)
+        )
+        lines.append(
+            f"| {a.id} | {status} | {_cell(a.question)} | {_cell(a.assumption)} | `{a.case}` |"
+        )
+    return [*lines, ""]
+
+
 def render_markdown(report: MigrationReport) -> str:
     lines = [
         "# Rosettalog migration report",
@@ -146,6 +172,7 @@ def render_markdown(report: MigrationReport) -> str:
             cells.append(cell)
         lines.append(f"| {_cell(a.name)} | {a.source_format} | " + " | ".join(cells) + " |")
     lines.append("")
+    lines += _assumptions(report)
     for a in report.artifacts:
         lines += _artifact(a)
     return "\n".join(lines).rstrip() + "\n"

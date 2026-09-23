@@ -91,6 +91,10 @@ class Frontend(Protocol):
         """Parse into IR artifacts. Must not raise for content problems: report findings."""
         ...
 
+    # Optional: ``def assumptions(self) -> rosettalog.ir.assumptions.AssumptionSet`` returns the
+    # frontend's registry of assumed source semantics. Its unconfirmed *global* assumptions are
+    # listed in every report that contains artifacts of that source format.
+
 
 @runtime_checkable
 class Backend(Protocol):

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Synthetic LSX for the fictional "Globex VPN" concentrator. Written from scratch for tests. -->
+<!-- Synthetic LSX for the fictional "Tessivor VPN" concentrator. Written from scratch for tests. -->
 <device-extension xmlns="event_parsing/device_extension">
   <pattern id="LoginEvent" xmlns=""><![CDATA[event=(LOGIN_\w+)]]></pattern>
   <pattern id="LoginUser" xmlns=""><![CDATA[user=(\S+)]]></pattern>

@@ -13,8 +13,14 @@ the development setup, the project rules, and a walkthrough for adding a new tar
 2. **Fixture policy.** Test fixtures and examples must be **synthetic** (written by you for
    Rosettalog) or taken from **public documentation**, with the source noted. **Never** commit
    vendor-shipped content (for example IBM's DSMs or content packs), real customer logs, or
-   anything containing real hostnames, IPs, user names or secrets. Use documentation ranges
-   (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`) and fictional vendors.
+   anything containing real hostnames, IPs, user names or secrets. Use fictional vendors whose
+   names you have checked are not an existing company or product.
+   **IPv4 addresses** may only come from the RFC 5737 documentation ranges (`192.0.2.0/24`,
+   `198.51.100.0/24`, `203.0.113.0/24`) or the RFC 1918 private ranges (`10.0.0.0/8`,
+   `172.16.0.0/12`, `192.168.0.0/16`). Everything else is forbidden. `0.0.0.0` is allowed only
+   where it has a documented meaning, and that file must be listed with its reason in
+   `tests/unit/test_fixture_hygiene.py`, which enforces this rule across `examples/` and
+   `tests/`.
    Every sample you add (in `samples.yaml` files) needs `expected` values for every field the
    parser produces, plus an honest `ground_truth_source`. Only write "observed on QRadar …"
    if you actually observed the values.

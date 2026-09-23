@@ -73,9 +73,9 @@ def test_verify_exit_codes() -> None:
         app,
         [
             "verify",
-            str(FIXTURES / "globex_vpn.lsx.xml"),
+            str(FIXTURES / "tessivor_vpn.lsx.xml"),
             "-s",
-            str(FIXTURES / "globex_vpn.samples.yaml"),
+            str(FIXTURES / "tessivor_vpn.samples.yaml"),
             "--to",
             "sentinel",
         ],
@@ -123,7 +123,7 @@ def test_directory_input(tmp_path: Path) -> None:
     result = runner.invoke(app, ["convert", str(FIXTURES), "--to", "sentinel", "-o", str(tmp_path)])
     assert result.exit_code == 0, result.output
     names = {a["name"] for a in json.loads((tmp_path / "report.json").read_text())["artifacts"]}
-    assert {"globex_vpn.lsx", "edge_cases.lsx"} <= names
+    assert {"tessivor_vpn.lsx", "edge_cases.lsx"} <= names
 
 
 def test_inspect_plugins_schema() -> None:

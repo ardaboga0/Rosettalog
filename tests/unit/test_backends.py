@@ -54,7 +54,7 @@ def test_splunk_direct_and_intermediate_fields() -> None:
 
 
 def test_splunk_single_timestamp_limitation() -> None:
-    r = SplunkBackend().generate(parse_lsx(FIXTURES / "globex_vpn.lsx.xml"), {})
+    r = SplunkBackend().generate(parse_lsx(FIXTURES / "tessivor_vpn.lsx.xml"), {})
     assert codes(r)["SPLUNK_SINGLE_TIMESTAMP"] is Status.PARTIAL
 
 

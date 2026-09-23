@@ -97,8 +97,9 @@ QRadar LSX ─► frontend ─► IR + findings ─► backend ─► target con
   QRadar", "derived from IBM docs" or "assumed"), and the report shows it. See
   [docs/verification.md](docs/verification.md).
 - **Assumptions are testable.** Where IBM's documentation is ambiguous, Rosettalog states its
-  assumption, and [`examples/confirmation/`](examples/confirmation/README.md) provides a minimal
-  LSX plus sample logs for each one, ready to load into QRadar CE.
+  assumption, and every report lists the global ones that are still unconfirmed.
+  [`examples/confirmation/`](examples/confirmation/README.md) provides a minimal LSX plus
+  sample logs for each one, ready to load into QRadar CE.
 - **Deployment scope.** Splunk index-time settings (they affect only newly indexed data) are
   separated from search-time extractions in both the generated props.conf and the report.
 - **Architecture.** Frontends and backends are plugins discovered through entry points, so

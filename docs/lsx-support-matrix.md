@@ -32,27 +32,37 @@ one has a minimal case in [`examples/confirmation/`](../examples/confirmation/RE
 plus sample log lines to load into QRadar CE and observe. **Status: unconfirmed.** The semantics
 stay as they are until observed results are recorded.
 
-| # | Assumption (current behaviour) | Finding emitted | Case |
-|---|---|---|---|
-| 1 | With several match groups, the first group (by `order`) whose EventName pattern matches is applied (any of its patterns, if it has no EventName). Only that group is applied; groups do not merge. | `LSX_MATCHGROUP_SELECTION_ASSUMED` (PARTIAL) | [01](../examples/confirmation/01-matchgroup-selection) |
-| 2 | A single match group applies even when its EventName pattern does not match. | none (global assumption) | [02](../examples/confirmation/02-single-group-without-eventname) |
-| 3 | `event-match-multiple`: EventName is taken from matchers first, then from the multiple's capture. Its category and severity apply when its pattern matches and no event-match-single entry matched. | `LSX_EVENT_MATCH_MULTIPLE_ASSUMED` (PARTIAL) | [03](../examples/confirmation/03-event-match-multiple) |
-| 4 | `event-match-single` takes precedence over an EventCategory matcher (derived from IBM docs). | none (derived from docs) | [04](../examples/confirmation/04-event-match-single-vs-category) |
-| 5 | `trim-whitespace` does not alter the pattern; it is used exactly as written. | `LSX_TRIM_WHITESPACE` (PARTIAL, only when the pattern contains whitespace) | [05](../examples/confirmation/05-trim-whitespace-pattern) |
-| 6 | `trim-whitespace` does not trim captured values. | none (global assumption) | [06](../examples/confirmation/06-trim-whitespace-value) |
-| 7 | An empty capture counts as "no value", so the next matcher `order` is tried. | none (global assumption) | [07](../examples/confirmation/07-empty-capture-fallback) |
-| 8 | In a substitution, a group that did not participate becomes an empty string. | none (global assumption) | [08](../examples/confirmation/08-substitution-missing-group) |
-| 9 | DeviceTime without a year uses the current year; without an offset it is treated as UTC. Joda literals match exactly (so `Mar  4` does not match `MMM d`), and month names are case-insensitive. | `DATE_NO_YEAR` (PARTIAL), `DATE_NO_TIMEZONE` (FULL note) | [09](../examples/confirmation/09-devicetime-year-timezone-leniency) |
-| 10 | Two-digit years map to 2000-2099. | `DATE_TWO_DIGIT_YEAR` (PARTIAL) | [10](../examples/confirmation/10-devicetime-two-digit-year) |
-| 11 | QRadar's default ("Adaptive") pattern engine has java.util.regex semantics, including lookbehind, backreferences and possessive quantifiers. | none (global assumption) | [11](../examples/confirmation/11-regex-engine-constructs) |
-| 12 | Matchers for one field that share an `order` are tried in document order. | `LSX_DUPLICATE_ORDER` (PARTIAL) | [12](../examples/confirmation/12-duplicate-matcher-order) |
-| 13 | A matcher with an undocumented field name is migrated as a custom field. | `LSX_UNKNOWN_FIELD` (PARTIAL) | [13](../examples/confirmation/13-custom-matcher-field) |
-| 14 | Literal text in a substitution template is copied verbatim; `\\` is not an escape. | none (global assumption) | [14](../examples/confirmation/14-substitution-literal-backslash) |
-| 15 | Patterns are matched against the full payload, including the syslog header. | none (global assumption) | [15](../examples/confirmation/15-payload-includes-syslog-header) |
+<!-- BEGIN GENERATED: assumptions (from src/rosettalog/frontends/qradar_lsx/assumptions.yaml; regenerate with `uv run python -m rosettalog.frontends.qradar_lsx.docs_sync`) -->
+| ID | Question | Current assumption | Scope / finding | Case | Status |
+|---|---|---|---|---|---|
+| A01 | With several match groups, which one applies? | The first group (by order) whose EventName pattern matches is applied (any of its patterns if it has no EventName). Only that group is applied; groups do not merge. | per artifact: `LSX_MATCHGROUP_SELECTION_ASSUMED` | [01](../examples/confirmation/01-matchgroup-selection) | unconfirmed |
+| A02 | Does a single match group apply when its EventName pattern does not match? | Yes. The only group is always applied, so other fields are still extracted. | global: listed in every report while not confirmed | [02](../examples/confirmation/02-single-group-without-eventname) | unconfirmed |
+| A03 | What does event-match-multiple do? | EventName comes from matchers first, otherwise from the multiple's capture. The multiple's category and severity apply when its pattern matches, unless an event-match-single entry matched the EventName. | per artifact: `LSX_EVENT_MATCH_MULTIPLE_ASSUMED` | [03](../examples/confirmation/03-event-match-multiple) | unconfirmed |
+| A04 | Does event-match-single take precedence over an EventCategory matcher? | Yes. It is derived from IBM's docs (EventCategory is "for any event with a category not handled by an event-match-single entity"). | global: listed in every report while not confirmed | [04](../examples/confirmation/04-event-match-single-vs-category) | unconfirmed |
+| A05 | Does trim-whitespace change the pattern? | No. The pattern is used exactly as written, whitespace included. | per artifact: `LSX_TRIM_WHITESPACE` | [05](../examples/confirmation/05-trim-whitespace-pattern) | unconfirmed |
+| A06 | Does trim-whitespace (or QRadar in general) trim captured values? | No. Captured values keep surrounding whitespace. | global: listed in every report while not confirmed | [06](../examples/confirmation/06-trim-whitespace-value) | unconfirmed |
+| A07 | Does an empty capture fall back to the next matcher order? | Yes. An empty capture counts as "no value", so the next order is tried. | global: listed in every report while not confirmed | [07](../examples/confirmation/07-empty-capture-fallback) | unconfirmed |
+| A08 | In a substitution, what does a group that did not participate produce? | An empty string. For example, the template '\2/\1' applied to "user=bob" (group 2 absent) gives "/bob". | global: listed in every report while not confirmed | [08](../examples/confirmation/08-substitution-missing-group) | unconfirmed |
+| A09 | DeviceTime without a year or UTC offset. Which year and time zone are used? | The current year, interpreted as UTC. | per artifact: `DATE_NO_YEAR`, `DATE_NO_TIMEZONE` | [09](../examples/confirmation/09-devicetime-year-timezone-leniency) | unconfirmed |
+| A10 | How lenient is Joda parsing of ext-data formats? | Literals match exactly (so "Mar  4" with two spaces does not match "MMM d"); month names are case-insensitive. | global: listed in every report while not confirmed | [09](../examples/confirmation/09-devicetime-year-timezone-leniency) | unconfirmed |
+| A11 | How are two-digit years (yy) expanded? | To 2000-2099 (69 becomes 2069). | per artifact: `DATE_TWO_DIGIT_YEAR` | [10](../examples/confirmation/10-devicetime-two-digit-year) | unconfirmed |
+| A12 | Does QRadar's default ("Adaptive") pattern engine support possessive quantifiers, lookbehind and backreferences like java.util.regex? | Yes. Patterns have java.util.regex semantics regardless of use-default-pattern. | global: listed in every report while not confirmed | [11](../examples/confirmation/11-regex-engine-constructs) | unconfirmed |
+| A13 | Two matchers for one field with the same order. Which wins? | Document order; the matcher listed first wins. | per artifact: `LSX_DUPLICATE_ORDER` | [12](../examples/confirmation/12-duplicate-matcher-order) | unconfirmed |
+| A14 | What happens to a matcher with an undocumented field name? | It is migrated as a custom field. | per artifact: `LSX_UNKNOWN_FIELD` | [13](../examples/confirmation/13-custom-matcher-field) | unconfirmed |
+| A15 | Is literal text in a substitution template (including backslashes) copied verbatim? | Yes. There is no escape processing, so '\1\\\2' gives 'alice\\corp'. | global: listed in every report while not confirmed | [14](../examples/confirmation/14-substitution-literal-backslash) | unconfirmed |
+| A16 | Are patterns matched against the full payload, including the syslog header? | Yes. | global: listed in every report while not confirmed | [15](../examples/confirmation/15-payload-includes-syslog-header) | unconfirmed |
+<!-- END GENERATED: assumptions -->
 
-Rows marked "none (global assumption)" apply to every artifact and are not reported per
-artifact. After confirmation, each will either be dropped (confirmed) or become a correction
-plus a finding (refuted).
+**How assumptions surface.**
+
+- **per artifact:** the listed finding is emitted wherever the construct occurs.
+- **global:** the assumption applies to every artifact. Instead of a per-artifact finding, it is
+  listed in the "Unconfirmed global assumptions" section of every migration report (Markdown and
+  JSON) until its status is `confirmed`.
+
+The table is generated from `src/rosettalog/frontends/qradar_lsx/assumptions.yaml`, the single
+source that the report uses too. To record a result, edit that file (`status`, `evidence`) and
+regenerate; a test fails if the docs are stale.
 
 ## Java regex constructs
 

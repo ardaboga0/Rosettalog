@@ -1,0 +1,153 @@
+# Single source of truth for the QRadar LSX behaviours Rosettalog ASSUMES where IBM's
+# documentation is silent or ambiguous.
+#
+# Generated from this file (do not edit by hand; run
+# `uv run python -m rosettalog.frontends.qradar_lsx.docs_sync` after changing it):
+#   - docs/lsx-support-matrix.md          "Assumed behaviours" table
+#   - examples/confirmation/README.md     "Cases" table
+# Used at runtime: every migration report lists the `global` assumptions whose status is not
+# `confirmed` ("Unconfirmed global assumptions"). Tests keep docs, cases and this file in sync.
+#
+# status: unconfirmed | confirmed | refuted. When a QRadar CE result is recorded, set the status
+# and `evidence` (e.g. "observed on QRadar CE 7.5.0, 2026-10-02: ..."). A refuted assumption stays
+# in reports until the frontend/emulator is corrected and the entry is updated.
+source_format: qradar-lsx
+confirmation_dir: examples/confirmation
+assumptions:
+  - id: A01
+    case: 01-matchgroup-selection
+    question: With several match groups, which one applies?
+    assumption: >-
+      The first group (by order) whose EventName pattern matches is applied (any of its patterns
+      if it has no EventName). Only that group is applied; groups do not merge.
+    alternatives: >-
+      Groups merge (line 1 gets SourcePort 1111); the last group wins (line 1: a1); a group
+      applies without an EventName match (line 3 extracts something).
+    scope: per-artifact
+    findings: [LSX_MATCHGROUP_SELECTION_ASSUMED]
+
+  - id: A02
+    case: 02-single-group-without-eventname
+    question: Does a single match group apply when its EventName pattern does not match?
+    assumption: Yes. The only group is always applied, so other fields are still extracted.
+    alternatives: Line 1 gets no UserName (EventName is a prerequisite).
+    scope: global
+
+  - id: A03
+    case: 03-event-match-multiple
+    question: What does event-match-multiple do?
+    assumption: >-
+      EventName comes from matchers first, otherwise from the multiple's capture. The multiple's
+      category and severity apply when its pattern matches, unless an event-match-single entry
+      matched the EventName.
+    alternatives: >-
+      The multiple overrides EventName (line 3: bar); it applies only to its own EventName;
+      line 1 gets MultiCat.
+    scope: per-artifact
+    findings: [LSX_EVENT_MATCH_MULTIPLE_ASSUMED]
+
+  - id: A04
+    case: 04-event-match-single-vs-category
+    question: Does event-match-single take precedence over an EventCategory matcher?
+    assumption: >-
+      Yes. It is derived from IBM's docs (EventCategory is "for any event with a category not
+      handled by an event-match-single entity").
+    alternatives: The matcher wins (line 1 gets raw).
+    scope: global
+
+  - id: A05
+    case: 05-trim-whitespace-pattern
+    question: Does trim-whitespace change the pattern?
+    assumption: No. The pattern is used exactly as written, whitespace included.
+    alternatives: Whitespace is removed from the pattern (line 1 gets no value, line 2 gets bob).
+    scope: per-artifact
+    findings: [LSX_TRIM_WHITESPACE]
+
+  - id: A06
+    case: 06-trim-whitespace-value
+    question: Does trim-whitespace (or QRadar in general) trim captured values?
+    assumption: No. Captured values keep surrounding whitespace.
+    alternatives: The value is "carol"; QRadar may also trim every value regardless of the flag.
+    scope: global
+
+  - id: A07
+    case: 07-empty-capture-fallback
+    question: Does an empty capture fall back to the next matcher order?
+    assumption: Yes. An empty capture counts as "no value", so the next order is tried.
+    alternatives: The first matching pattern wins even when its capture is empty (line 1 is empty).
+    scope: global
+
+  - id: A08
+    case: 08-substitution-missing-group
+    question: In a substitution, what does a group that did not participate produce?
+    assumption: >-
+      An empty string. For example, the template '\2/\1' applied to "user=bob" (group 2 absent)
+      gives "/bob".
+    alternatives: '"null/bob", "\2/bob", or no value at all.'
+    scope: global
+
+  - id: A09
+    case: 09-devicetime-year-timezone-leniency
+    question: DeviceTime without a year or UTC offset. Which year and time zone are used?
+    assumption: The current year, interpreted as UTC.
+    alternatives: A fixed year (1970/2000); the console or log source time zone.
+    scope: per-artifact
+    findings: [DATE_NO_YEAR, DATE_NO_TIMEZONE]
+
+  - id: A10
+    case: 09-devicetime-year-timezone-leniency
+    question: How lenient is Joda parsing of ext-data formats?
+    assumption: >-
+      Literals match exactly (so "Mar  4" with two spaces does not match "MMM d"); month names
+      are case-insensitive.
+    alternatives: Line 2 parses leniently; line 3 (lowercase month) fails.
+    scope: global
+
+  - id: A11
+    case: 10-devicetime-two-digit-year
+    question: How are two-digit years (yy) expanded?
+    assumption: To 2000-2099 (69 becomes 2069).
+    alternatives: A sliding pivot (69 becomes 1969).
+    scope: per-artifact
+    findings: [DATE_TWO_DIGIT_YEAR]
+
+  - id: A12
+    case: 11-regex-engine-constructs
+    question: >-
+      Does QRadar's default ("Adaptive") pattern engine support possessive quantifiers,
+      lookbehind and backreferences like java.util.regex?
+    assumption: Yes. Patterns have java.util.regex semantics regardless of use-default-pattern.
+    alternatives: >-
+      The upload is rejected, or fields are missing. If so, rerun with use-default-pattern="true"
+      and record both results.
+    scope: global
+
+  - id: A13
+    case: 12-duplicate-matcher-order
+    question: Two matchers for one field with the same order. Which wins?
+    assumption: Document order; the matcher listed first wins.
+    alternatives: The other matcher wins, or the upload is rejected.
+    scope: per-artifact
+    findings: [LSX_DUPLICATE_ORDER]
+
+  - id: A14
+    case: 13-custom-matcher-field
+    question: What happens to a matcher with an undocumented field name?
+    assumption: It is migrated as a custom field.
+    alternatives: The upload is rejected, or the field is silently ignored.
+    scope: per-artifact
+    findings: [LSX_UNKNOWN_FIELD]
+
+  - id: A15
+    case: 14-substitution-literal-backslash
+    question: Is literal text in a substitution template (including backslashes) copied verbatim?
+    assumption: Yes. There is no escape processing, so '\1\\\2' gives 'alice\\corp'.
+    alternatives: '"\\" is an escaped backslash, giving alice\corp.'
+    scope: global
+
+  - id: A16
+    case: 15-payload-includes-syslog-header
+    question: Are patterns matched against the full payload, including the syslog header?
+    assumption: Yes.
+    alternatives: Patterns only see the message after the header (no value for line 1).
+    scope: global

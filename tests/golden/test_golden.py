@@ -12,7 +12,7 @@ from tests.conftest import EXAMPLES, FIXTURES, parse_lsx
 GOLDEN = Path(__file__).parent
 CASES = {
     "acme_fw": (EXAMPLES / "acme_firewall" / "acme_fw.lsx.xml", {"splunk": {"sourcetype": "acme:firewall"}}),
-    "globex_vpn": (FIXTURES / "globex_vpn.lsx.xml", {}),
+    "tessivor_vpn": (FIXTURES / "tessivor_vpn.lsx.xml", {}),
 }  # fmt: skip
 
 

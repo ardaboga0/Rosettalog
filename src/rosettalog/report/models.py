@@ -7,6 +7,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, computed_field
 
 from rosettalog.ir import Finding, Status
+from rosettalog.ir.assumptions import Assumption
 from rosettalog.plugins import DeploymentSetting
 from rosettalog.verify.harness import VerificationResult
 
@@ -39,6 +40,9 @@ class MigrationReport(BaseModel):
     inputs: list[str]
     targets: list[str]
     artifacts: list[ArtifactReport] = Field(default_factory=list)
+    unconfirmed_global_assumptions: list[Assumption] = Field(default_factory=list)
+    """Global assumptions about the source formats in this report that are not yet confirmed
+    (status ``unconfirmed`` or ``refuted``). They apply to every artifact of that format."""
 
     @computed_field  # type: ignore[prop-decorator]
     @property

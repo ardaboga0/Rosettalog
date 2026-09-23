@@ -23,11 +23,26 @@ core value is migrating *parsing logic* with honest findings and field-level ver
 
 1. **Honesty over coverage.** Every element is translated faithfully, or produces a `Finding`
    (PARTIAL or UNSUPPORTED) that explains exactly what differs. Never drop logic, guess
-   semantics or "best effort" silently. When IBM's docs are ambiguous, emit a PARTIAL finding
-   that states the assumption. New codes go in `docs/findings-codes.md`
+   semantics or "best effort" silently. New codes go in `docs/findings-codes.md`
    (`tests/unit/test_docs.py` enforces this).
+   **Assumptions** (where IBM's docs are silent or ambiguous) are registered in
+   `src/rosettalog/frontends/qradar_lsx/assumptions.yaml`, the single source, with an ID, a
+   confirmation case and a status (`unconfirmed`/`confirmed`/`refuted`). There are two kinds:
+   - `per-artifact`: the construct only appears in some artifacts. Emit the PARTIAL finding
+     listed in the entry wherever it occurs.
+   - `global`: the assumption applies to every artifact. Emit **no** per-artifact finding. The
+     pipeline lists every global assumption whose status is not `confirmed` in the report's
+     top-level "Unconfirmed global assumptions" section (MD and JSON). Confirmed entries drop
+     out automatically; refuted ones stay, marked, until the code is fixed.
+
+   The doc tables in `docs/lsx-support-matrix.md` and `examples/confirmation/README.md` are
+   generated from the YAML (`uv run python -m rosettalog.frontends.qradar_lsx.docs_sync`).
+   Never edit them by hand; `tests/unit/test_assumptions.py` fails when they are stale.
 2. **Fixtures are synthetic or from public docs.** Never add vendor-shipped content (IBM DSMs,
-   content packs) or real logs. Use fictional vendors and RFC 5737 IP ranges.
+   content packs) or real logs. Use fictional vendor names that you have checked are not a real
+   company or product. IPv4 addresses must be RFC 5737 (documentation) or RFC 1918 (private);
+   everything else is forbidden. `0.0.0.0` is allowed only where it has a documented meaning,
+   with an allowlist entry and reason in `tests/unit/test_fixture_hygiene.py` (enforced).
 3. **The core is SIEM-agnostic.** `pipeline.py`, `ir/`, `report/` and `verify/harness.py` must
    not reference a specific source or target. Plugins are registered through entry points in
    `pyproject.toml`.
@@ -37,9 +52,9 @@ core value is migrating *parsing logic* with honest findings and field-level ver
    field the parser produces, plus a `ground_truth_source` ("observed on QRadar CE x.y",
    "derived from IBM docs" or "assumed"). Tests enforce this. Never label assumed values as
    observed.
-6. **Assumptions are frozen until confirmed.** The assumed LSX behaviours in
-   `docs/lsx-support-matrix.md` (confirmation cases in `examples/confirmation/`) must not be
-   changed until observed QRadar CE results are recorded. If a confirmation case's `expected`
+6. **Assumptions are frozen until confirmed.** The assumed LSX behaviours in the registry
+   (confirmation cases in `examples/confirmation/`) must not be changed until observed QRadar CE
+   results are recorded. If a confirmation case's `expected`
    changes to observed values and the tests fail, fix the frontend or emulator and its finding,
    not the expected values.
 7. **Deployment scope.** Every generated setting is declared in `BackendResult.settings` as
@@ -93,9 +108,9 @@ uv run rosettalog convert examples/acme_firewall/acme_fw.lsx.xml --to sentinel -
 
 ## Known assumptions
 
-The full list, with the findings each one emits and its QRadar CE confirmation case, is in
-`docs/lsx-support-matrix.md` under "Assumed behaviours". Do not change these semantics until
-observed results are recorded (rule 6).
+The registry is `src/rosettalog/frontends/qradar_lsx/assumptions.yaml` (rule 1). A generated
+view is in `docs/lsx-support-matrix.md` under "Assumed behaviours". Do not change these
+semantics until observed results are recorded (rule 6).
 
 The source emulator approximates Java regex with the Python `regex` module in ASCII mode. The
 remaining known differences are listed in `docs/architecture.md`.

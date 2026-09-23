@@ -13,6 +13,7 @@ from pathlib import Path
 from rosettalog import __version__
 from rosettalog.errors import InputError
 from rosettalog.ir import Artifact, Finding, Provenance, Status, aggregate_status
+from rosettalog.ir.assumptions import Assumption, AssumptionSet
 from rosettalog.plugins import frontends, get_backend
 from rosettalog.report import ArtifactReport, MigrationReport, TargetReport
 from rosettalog.verify.harness import verify
@@ -27,6 +28,19 @@ def _unsupported_input(path: Path, message: str) -> Artifact:
         provenance=Provenance(file=str(path)),
         findings=[Finding(status=Status.UNSUPPORTED, code="NO_FRONTEND", path="", message=message)],
     )
+
+
+def open_global_assumptions(source_formats: set[str]) -> list[Assumption]:
+    """Unconfirmed/refuted global assumptions of the frontends for ``source_formats``."""
+    out: list[Assumption] = []
+    for cls in frontends().values():
+        provider = getattr(cls(), "assumptions", None)
+        if provider is None:
+            continue
+        aset = provider()
+        if isinstance(aset, AssumptionSet) and aset.source_format in source_formats:
+            out.extend(aset.open_global())
+    return out
 
 
 def discover(paths: Sequence[Path]) -> list[Path]:
@@ -158,4 +172,7 @@ def run(
                 )
             )
         report.artifacts.append(entry)
+    report.unconfirmed_global_assumptions = open_global_assumptions(
+        {a.source_format for a in artifacts}
+    )
     return report

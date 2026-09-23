@@ -11,11 +11,11 @@ def codes(artifact) -> dict[str, Status]:
 
 def test_accepts_only_lsx() -> None:
     fe = QRadarLsxFrontend()
-    assert fe.accepts(FIXTURES / "globex_vpn.lsx.xml")
+    assert fe.accepts(FIXTURES / "tessivor_vpn.lsx.xml")
     assert not fe.accepts(FIXTURES / "not_lsx.xml")
     # A truncated LSX is still claimed by this frontend, which then reports LSX_INVALID_XML.
     assert fe.accepts(FIXTURES / "broken.xml")
-    assert not fe.accepts(FIXTURES / "globex_vpn.samples.yaml")
+    assert not fe.accepts(FIXTURES / "tessivor_vpn.samples.yaml")
 
 
 def test_matcher_order_becomes_coalesce(lsx) -> None:
@@ -100,7 +100,7 @@ def test_devicetime_with_format(lsx) -> None:
 
 
 def test_multiple_groups_flag_assumption_and_selectors() -> None:
-    a = parse_lsx(FIXTURES / "globex_vpn.lsx.xml")
+    a = parse_lsx(FIXTURES / "tessivor_vpn.lsx.xml")
     assert codes(a)["LSX_MATCHGROUP_SELECTION_ASSUMED"] is Status.PARTIAL
     g1, g2 = a.parser.match_groups
     assert g1.selector_pattern_ids == ["LoginEvent"]

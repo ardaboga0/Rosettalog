@@ -34,8 +34,11 @@ Rosettalog does **not** re-implement them:
 1. **Honesty over coverage.** Each element of each artifact gets one of three statuses:
    translated faithfully, translated with a known difference, or not translated. Every
    difference and every gap is a [finding](findings-codes.md). Nothing is dropped silently.
-   Where IBM's documentation is ambiguous, the assumption is stated. Each assumption has a
-   QRadar CE confirmation case (see the
+   Where IBM's documentation is ambiguous, the assumption is registered in one data file per
+   frontend (`frontends/qradar_lsx/assumptions.yaml`), and each one has a QRadar CE
+   confirmation case. *Per-artifact* assumptions emit a finding where they apply. *Global*
+   assumptions are listed in every report's "Unconfirmed global assumptions" section until
+   confirmed. The doc tables are generated from the same file (see the
    [support matrix](lsx-support-matrix.md#assumed-behaviours-awaiting-qradar-ce-confirmation)).
 2. **Pluggable at both ends.** Frontends, backends and emulators are discovered through entry
    points (`rosettalog.frontends`, `rosettalog.backends`, `rosettalog.emulators`). The core

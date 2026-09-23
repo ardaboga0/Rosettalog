@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         **Do not paste real customer logs or vendor-shipped content.** Reduce the problem to a
-        minimal, synthetic reproduction (fictional vendor, 192.0.2.0/24 addresses).
+        minimal, synthetic reproduction (fictional vendor; RFC 5737 or RFC 1918 addresses only).
   - type: textarea
     id: repro
     attributes:
