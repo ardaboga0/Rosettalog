@@ -33,7 +33,7 @@ to target queries.
 Requires Python 3.11+.
 
 ```bash
-git clone https://github.com/rosettalog/rosettalog && cd rosettalog
+git clone https://github.com/ardaboga0/rosettalog.git && cd rosettalog
 uv sync                      # or: pip install -e .
 
 # Translate the bundled synthetic example to both targets, verifying against sample logs

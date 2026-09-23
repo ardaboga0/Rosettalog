@@ -7,6 +7,14 @@ community. Harassment, discrimination and personal attacks are not tolerated.
 
 ## Enforcement
 
-Report unacceptable behaviour to the maintainers through the contact listed in the repository's
-GitHub profile, or privately via a GitHub security advisory if the matter is sensitive.
-Maintainers will review every report and respond fairly and confidentially.
+Code of Conduct concerns are handled by the project maintainer, **Arda Boga**
+([@ardaboga0](https://github.com/ardaboga0)).
+
+GitHub has no private messages. To raise a concern, use the contact options on the
+maintainer's [GitHub profile](https://github.com/ardaboga0), or open a short issue that only
+asks the maintainer to get in touch. Do not include details of the incident in a public issue.
+
+> A dedicated contact email for Code of Conduct reports will be added here later.
+
+Reports are reviewed promptly, fairly and confidentially. The Contributor Covenant's enforcement
+guidelines apply.

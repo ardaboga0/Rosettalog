@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+No release has been tagged yet.
+
 ### Changed
 - Roadmap re-scoped. M2 is now an integration point plus an optional adapter for external AQL
   translators (no AQL grammar). M3 is QRadar rules → Sigma only, with pySigma for targets.
@@ -44,3 +46,5 @@ All notable changes to this project are documented here. The format follows
 - Verification harness with local emulators for QRadar semantics, KQL (on RE2) and Splunk .conf.
 - Markdown and JSON migration reports; `rosettalog schema` prints the JSON schema.
 - CLI: `convert`, `verify`, `inspect`, `plugins`, `schema`.
+
+[Unreleased]: https://github.com/ardaboga0/rosettalog/commits/main

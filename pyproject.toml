@@ -6,7 +6,7 @@ readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.11"
-authors = [{ name = "Rosettalog contributors" }]
+authors = [{ name = "Arda Boga and Rosettalog contributors" }]
 keywords = ["siem", "qradar", "sentinel", "splunk", "kql", "detection-engineering", "migration"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -44,8 +44,10 @@ sentinel = "rosettalog.verify.emulators.kql:KqlEmulator"
 splunk = "rosettalog.verify.emulators.splunk:SplunkEmulator"
 
 [project.urls]
-Homepage = "https://github.com/rosettalog/rosettalog"
-Issues = "https://github.com/rosettalog/rosettalog/issues"
+Homepage = "https://github.com/ardaboga0/rosettalog"
+Repository = "https://github.com/ardaboga0/rosettalog"
+Issues = "https://github.com/ardaboga0/rosettalog/issues"
+Changelog = "https://github.com/ardaboga0/rosettalog/blob/main/CHANGELOG.md"
 
 [dependency-groups]
 dev = [
