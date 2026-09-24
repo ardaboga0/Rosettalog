@@ -10,14 +10,20 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, ClassVar
 
 from rosettalog.plugins import BackendResult
 from rosettalog.timefmt.joda import Comp, build_datetime, format_timestamp
 from rosettalog.verify.emulators.pcre import compile_pcre
 
-SUPPORTED_PROPS = {"SHOULD_LINEMERGE", "TIME_PREFIX", "TIME_FORMAT", "KV_MODE"}
+SUPPORTED_PROPS = {
+    "SHOULD_LINEMERGE", "TIME_PREFIX", "TIME_FORMAT", "KV_MODE", "MAX_DAYS_AGO", "MAX_DAYS_HENCE",
+}  # fmt: skip
+# props.conf defaults (Splunk 10.4 reference): timestamps outside the window are replaced by the
+# timestamp of the last acceptable event.
+DEFAULT_MAX_DAYS_AGO = 2000
+DEFAULT_MAX_DAYS_HENCE = 2
 
 
 class SplunkEmulationError(Exception):
@@ -267,8 +273,25 @@ class _Timestamp:
     prefix: Any
     fmt: Any
     comps: list[Comp]
+    max_days_ago: int = DEFAULT_MAX_DAYS_AGO
+    max_days_hence: int = DEFAULT_MAX_DAYS_HENCE
+
+    def in_window(self, dt: datetime, now: datetime) -> bool:
+        return (
+            now - timedelta(days=self.max_days_ago)
+            <= dt
+            <= now + timedelta(days=self.max_days_hence)
+        )
 
     def extract(self, raw: str, now: datetime) -> str | None:
+        """``_time`` taken from the event, or None (Splunk falls back to another timestamp)."""
+        dt = self.parse(raw, now)
+        if dt is None or not self.in_window(dt, now):
+            return None
+        return format_timestamp(dt)
+
+    def parse(self, raw: str, now: datetime) -> datetime | None:
+        """The timestamp TIME_PREFIX/TIME_FORMAT describe, before the MAX_DAYS_* window."""
         start = 0
         if self.prefix is not None:
             m = self.prefix.search(raw)
@@ -284,8 +307,7 @@ class _Timestamp:
         if Comp.YEAR2 in values:  # Splunk's %y pivot: 69-99 -> 19xx, 00-68 -> 20xx
             yy = int(values.pop(Comp.YEAR2))
             values[Comp.YEAR4] = str(1900 + yy if yy >= 69 else 2000 + yy)
-        dt = build_datetime(values, now=now)
-        return format_timestamp(dt) if dt else None
+        return build_datetime(values, now=now)
 
 
 class SplunkEmulator:
@@ -332,7 +354,11 @@ class SplunkEmulator:
             rx, comps = strptime_regex(stanza["TIME_FORMAT"])
             prefix = stanza.get("TIME_PREFIX")
             self.timestamp = _Timestamp(
-                compile_pcre(prefix) if prefix else None, compile_pcre(rx), comps
+                compile_pcre(prefix) if prefix else None,
+                compile_pcre(rx),
+                comps,
+                int(stanza.get("MAX_DAYS_AGO", DEFAULT_MAX_DAYS_AGO)),
+                int(stanza.get("MAX_DAYS_HENCE", DEFAULT_MAX_DAYS_HENCE)),
             )
 
     def extract(self, log: str, *, now: datetime) -> dict[str, str | None]:
@@ -344,6 +370,8 @@ class SplunkEmulator:
             groups = [m.group(0), *m.groups()]
             for name, template in pairs:
                 value = re.sub(r"\$(\d+)", lambda g: groups[int(g.group(1))] or "", template)  # noqa: B023
+                # Splunk trims surrounding whitespace from extracted values (seen with 10.4.3).
+                value = value.strip()
                 if value:
                     fields[name] = value
         computed = {name: _eval(node, fields) for name, node in self.evals}

@@ -9,6 +9,10 @@ stable code. Codes never change meaning; new behaviour gets a new code. A findin
 
 A test (`tests/unit/test_docs.py`) checks that every code emitted by the source tree is listed here.
 
+Some findings are **linked to an assumption** in the source's assumption registry (e.g. A06, A11).
+Their status and text are chosen from the assumption's current status (unconfirmed, confirmed or
+refuted) when the report is built, and the text ends with `[Assumption <id>: <status>]`.
+
 ## Source: QRadar LSX frontend
 
 | Code | Status | Meaning |
@@ -73,7 +77,7 @@ A test (`tests/unit/test_docs.py`) checks that every code emitted by the source 
 | `DATE_UNSUPPORTED_TOKEN` | UNSUPPORTED | A format letter we cannot reproduce (era, week-year, zone names, and so on). |
 | `DATE_INCOMPLETE` | UNSUPPORTED | The format has no month or day. |
 | `DATE_NO_YEAR` | PARTIAL | The current year is assumed. |
-| `DATE_TWO_DIGIT_YEAR` | PARTIAL | The century pivot differs between engines. |
+| `DATE_TWO_DIGIT_YEAR_PIVOT` | PARTIAL / FULL | Per target: how the engine expands two-digit years, compared with QRadar's pivot. **Linked to assumption A11**, so status and text follow its confirmation status. Engines: Joda-Time default (current year −80…+19), Splunk `%y` (standard strptime, 69–99 → 19xx), Elasticsearch `uu` and KQL (2000–2099). |
 | `DATE_12H_WITHOUT_AMPM` | PARTIAL | A 12-hour clock without an AM/PM marker. |
 | `DATE_TZ_COLON_OFFSET` | PARTIAL | Offset `+hh:mm` maps to Splunk `%:z`. |
 | `DATE_NO_TIMEZONE` | FULL | No offset in the format, so timestamps are treated as UTC. |
@@ -108,6 +112,8 @@ A test (`tests/unit/test_docs.py`) checks that every code emitted by the source 
 | `SPLUNK_EVENT_BREAKING_ASSUMED` | FULL | `SHOULD_LINEMERGE = false` (one event per line) is an index-time setting and only affects newly indexed data. |
 | `SPLUNK_TIMESTAMP_FALLBACK` | PARTIAL | When `TIME_FORMAT` does not match, Splunk falls back to automatic timestamp recognition or the previous event's time, where QRadar leaves DeviceTime unset. |
 | `SPLUNK_YEAR_INFERENCE` | PARTIAL | The timestamp format has no year; Splunk infers it from neighbouring events (out-of-order events can be assigned the next year and rejected by `MAX_DAYS_HENCE`). |
+| `SPLUNK_VALUE_TRIMMED` | PARTIAL / FULL | Splunk trims surrounding whitespace from extracted values. **Linked to assumption A06**: it only matters if QRadar preserves the whitespace, and the text follows A06's status (FULL once refuted). |
+| `SPLUNK_TIME_WINDOW` | PARTIAL | Extracted timestamps older than `MAX_DAYS_AGO` (default 2000 days) or more than `MAX_DAYS_HENCE` (default 2 days) ahead are replaced by the last acceptable event's timestamp. |
 | `SPLUNK_KV_MODE_NONE` | FULL | `KV_MODE = none` disables Splunk's automatic key=value extraction for the sourcetype, so only translated fields appear. |
 | `SPLUNK_APP_SCOPE` | FULL | Search-time extractions deployed inside an app only apply in that app unless its knowledge objects are exported (`export = system`). |
 | `SPLUNK_INTERMEDIATE_FIELDS` | FULL | `rl_*` helper fields are visible at search time. |

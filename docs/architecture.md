@@ -96,6 +96,15 @@ A translated field that depends on index-time configuration gets a finding
 (`SPLUNK_INDEX_TIME_DEPENDENCY`, PARTIAL). Its correctness depends on where the setting is
 deployed and on when the data was indexed.
 
+### Findings linked to assumptions
+
+Some target differences only matter under a particular source behaviour. For example, Splunk
+trims extracted values, but that only differs from QRadar if QRadar preserves whitespace
+(assumption A06). Such findings carry `depends_on` with a source-independent **topic**
+(`value-whitespace`, `two-digit-year-pivot`) and a status/text variant for each assumption
+status. The pipeline looks the topic up in the source frontend's registry and applies the
+matching variant, so reports update automatically when an assumption is confirmed or refuted.
+
 ## Real-engine runners
 
 `RealEngineRunner` plugins (group `rosettalog.runners`) run the *generated* content on the real

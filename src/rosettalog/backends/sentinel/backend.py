@@ -26,6 +26,7 @@ from rosettalog.backends.common import (
     camel,
     date_format_findings,
     describe,
+    two_digit_year_finding,
 )
 from rosettalog.ir import (
     Artifact,
@@ -161,6 +162,17 @@ class _Renderer:
     def parse_time(self, value: Expr, fmt_text: str, rule: FieldRule) -> str | None:
         fmt = compile_format(fmt_text)
         self.findings.extend(date_format_findings(fmt, path=rule.path, target=NAME, line=rule.line))
+        if Comp.YEAR2 in fmt.components:
+            self.findings.append(
+                two_digit_year_finding(
+                    "the generated KQL (2000 + yy)",
+                    "2000-2099",
+                    fixed_2000=True,
+                    path=rule.path,
+                    target=NAME,
+                    line=rule.line,
+                )
+            )
         text = self.expr(value, rule)
         if text is None or not fmt.usable:
             return None

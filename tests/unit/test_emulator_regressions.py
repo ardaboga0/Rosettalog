@@ -126,3 +126,50 @@ def test_splunk_time_not_comparable_when_year_inferred_or_auto_recognised() -> N
     assert time_value({"rl_epoch": "1"}, "no timestamp", ts, NOW) is None
     auto = {"timestartpos": "5", "rl_epoch": "1773480413"}
     assert isinstance(time_value(auto, "no ts= here 2026-03-14 09:26:53", ts, NOW), NotComparable)
+
+
+def test_splunk_trims_extracted_values() -> None:
+    """Splunk 10.4.3 (CI run 35937389853), confirmation case 06 line 1: `user=  carol  ;`
+    extracted as 'carol' while the emulator kept '  carol  '."""
+    from rosettalog.backends.splunk import SplunkBackend
+    from rosettalog.verify.emulators.splunk import SplunkEmulator
+
+    case = EXAMPLES / "confirmation" / "06-trim-whitespace-value" / "extension.xml"
+    result = SplunkBackend().generate(parse_lsx(case), {})
+    log = "<13>Mar 24 10:00:00 rl-confirm-06 rltest: evt=T3 user=  carol  ;"
+    assert SplunkEmulator(result).extract(log, now=NOW)[result.field_names["UserName"]] == "carol"
+
+
+def test_splunk_rejects_timestamps_outside_the_window() -> None:
+    """Splunk 10.4.3 (CI run 35937389853), confirmation case 10 line 2: `d=01/02/69 10:00`
+    (%y -> 1969) is older than MAX_DAYS_AGO (2000 days) and was replaced by another event's time,
+    while the emulator returned 1969."""
+    from rosettalog.backends.splunk import SplunkBackend
+    from rosettalog.verify.emulators.splunk import SplunkEmulator
+
+    case = EXAMPLES / "confirmation" / "10-devicetime-two-digit-year" / "extension.xml"
+    result = SplunkBackend().generate(parse_lsx(case), {})
+    em = SplunkEmulator(result)
+    old = "<13>Mar 24 10:00:00 rl-confirm-10 rltest: evt=E2 d=01/02/69 10:00"
+    future = "<13>Mar 24 10:00:00 rl-confirm-10 rltest: evt=E3 d=01/02/50 10:00"
+    recent = "<13>Mar 24 10:00:00 rl-confirm-10 rltest: evt=E1 d=01/02/26 10:00"
+    assert em.extract(old, now=NOW)["_time"] is None
+    assert em.extract(future, now=NOW)["_time"] is None  # 2050: beyond MAX_DAYS_HENCE
+    assert em.extract(recent, now=NOW)["_time"] == "2026-02-01T10:00:00.000Z"
+    codes = {f.code for f in result.findings}
+    assert "SPLUNK_TIME_WINDOW" in codes
+
+
+def test_splunk_window_verdict_depending_on_today_is_not_comparable() -> None:
+    from datetime import UTC, datetime
+
+    from rosettalog.backends.splunk import SplunkBackend
+    from rosettalog.plugins import NotComparable
+    from rosettalog.verify.emulators.splunk import SplunkEmulator
+    from rosettalog.verify.real.splunk import time_value
+
+    result = SplunkBackend().generate(parse_lsx(ACME), {"sourcetype": "acme:fw"})
+    ts = SplunkEmulator(result).timestamp
+    long_ago = datetime(2000, 1, 1, tzinfo=UTC)  # 2026-03-14 is far in the future from here
+    row = {"timestartpos": "49", "rl_epoch": "1773480413.12"}
+    assert isinstance(time_value(row, ACME_TCP_DENY, ts, long_ago), NotComparable)

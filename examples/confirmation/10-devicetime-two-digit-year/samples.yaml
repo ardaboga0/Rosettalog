@@ -16,3 +16,9 @@ samples:
   expected:
     EventName: E2
     DeviceTime: '2069-02-01T10:00:00.000Z'
+- name: line 3
+  log: '<13>Mar 24 10:00:00 rl-confirm-10 rltest: evt=E3 d=01/02/50 10:00'
+  ground_truth_source: 'assumed: Rosettalog''s current interpretation; to be confirmed on QRadar CE'
+  expected:
+    EventName: E3
+    DeviceTime: '2050-02-01T10:00:00.000Z'

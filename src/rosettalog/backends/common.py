@@ -5,7 +5,16 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from rosettalog.ir import Artifact, Expr, Finding, ParserSpec, Status, pattern_ids
+from rosettalog.ir import (
+    Artifact,
+    AssumptionDependency,
+    Expr,
+    Finding,
+    ParserSpec,
+    Status,
+    Variant,
+    pattern_ids,
+)
 from rosettalog.regex.translate import RegexTranslation, Target, translate
 from rosettalog.timefmt.joda import DateFormat, compile_format
 
@@ -118,6 +127,60 @@ def date_format_findings(
     ]
 
 
+JODA_PIVOT_NOTE = (
+    "Joda-Time's documented default for 'yy', which QRadar ext-data formats use, is a sliding "
+    "window from the current year -80 to +19"
+)
+
+
+def two_digit_year_finding(
+    engine: str, window: str, *, fixed_2000: bool, path: str, target: str, line: int | None
+) -> Finding:
+    """Two-digit year handling of a target, linked to the QRadar pivot assumption (A11)."""
+    head = f"Two-digit years: {engine} expands them to {window}."
+    if fixed_2000:
+        dep = AssumptionDependency(
+            topic="two-digit-year-pivot",
+            unconfirmed=Variant(
+                status=Status.PARTIAL,
+                message=f"{head} That matches Rosettalog's unconfirmed QRadar assumption "
+                f"(2000-2099), but {JODA_PIVOT_NOTE}, so years such as 50-99 may differ.",
+            ),
+            confirmed=Variant(status=Status.FULL, message=f"{head} QRadar does the same."),
+            refuted=Variant(
+                status=Status.PARTIAL,
+                message=f"{head} QRadar uses a different window, so some years differ.",
+            ),
+        )
+    else:
+        dep = AssumptionDependency(
+            topic="two-digit-year-pivot",
+            unconfirmed=Variant(
+                status=Status.PARTIAL,
+                message=f"{head} Rosettalog's unconfirmed QRadar assumption is 2000-2099 (and "
+                f"{JODA_PIVOT_NOTE}), so years 69-99 differ from the assumption.",
+            ),
+            confirmed=Variant(
+                status=Status.PARTIAL,
+                message=f"{head} QRadar uses 2000-2099, so years 69-99 differ.",
+            ),
+            refuted=Variant(
+                status=Status.PARTIAL,
+                message=f"{head} QRadar uses another window; compare with the observed "
+                "QRadar behaviour.",
+            ),
+        )
+    return Finding(
+        status=dep.unconfirmed.status,
+        code="DATE_TWO_DIGIT_YEAR_PIVOT",
+        path=path,
+        message=dep.unconfirmed.message,
+        target=target,
+        line=line,
+        depends_on=dep,
+    )
+
+
 def describe(expr: Expr) -> str:
     ids = pattern_ids(expr)
     return f"candidate using pattern '{ids[0]}'" if ids else "candidate"
@@ -136,4 +199,5 @@ __all__ = [
     "date_format_findings",
     "describe",
     "slugify",
+    "two_digit_year_finding",
 ]

@@ -219,9 +219,17 @@ def time_value(row: dict[str, Any], log: str, timestamp: Any, now: datetime) -> 
             "TIME_FORMAT has no year; Splunk infers it from neighbouring events (an "
             "out-of-order event was assigned the next year and rejected by MAX_DAYS_HENCE)."
         )
+    if timestamp is not None:
+        dt = timestamp.parse(log, now)
+        today = datetime.now(UTC)
+        if dt is not None and timestamp.in_window(dt, now) != timestamp.in_window(dt, today):
+            return NotComparable(
+                "whether Splunk accepts this timestamp (MAX_DAYS_AGO/MAX_DAYS_HENCE) depends on "
+                "today's date, while the emulator uses the samples' reference_time."
+            )
     if row.get("timestartpos") is None:
         return None  # not taken from the event (index time / previous event's time)
-    if timestamp is not None and timestamp.extract(log, now) is None:
+    if timestamp is not None and timestamp.parse(log, now) is None:
         return NotComparable(
             "TIME_FORMAT did not match; Splunk's automatic timestamp recognition found a "
             "timestamp elsewhere in the event, which is not emulated."

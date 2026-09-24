@@ -36,7 +36,10 @@ def _scope(a: Assumption) -> str:
 
 
 def _status(a: Assumption) -> str:
-    return a.status + (f" ({_cell(a.evidence)})" if a.evidence else "")
+    label = f"**{a.status_label}**" if a.evidence_against else a.status
+    if a.evidence_against and a.status == "unconfirmed":
+        label += f": {_cell(a.evidence_against)}"
+    return label + (f" ({_cell(a.evidence)})" if a.evidence else "")
 
 
 def render_matrix_table(aset: AssumptionSet) -> str:

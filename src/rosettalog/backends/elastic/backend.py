@@ -31,6 +31,7 @@ from rosettalog.backends.common import (
     date_format_findings,
     describe,
     slugify,
+    two_digit_year_finding,
 )
 from rosettalog.ir import (
     Artifact,
@@ -50,7 +51,7 @@ from rosettalog.ir.fields import resolve_names
 from rosettalog.plugins import BackendResult, DeploymentSetting, GeneratedFile
 from rosettalog.regex.grok import GrokPattern, to_grok
 from rosettalog.timefmt.javatime import to_java_pattern
-from rosettalog.timefmt.joda import compile_format
+from rosettalog.timefmt.joda import Comp, compile_format
 
 NAME = "elastic"
 MG = "rl_mg"
@@ -221,6 +222,17 @@ class _Compiler:
     ) -> bool:
         fmt = compile_format(fmt_text)
         self.findings.extend(date_format_findings(fmt, path=rule.path, target=NAME, line=rule.line))
+        if Comp.YEAR2 in fmt.components:
+            self.findings.append(
+                two_digit_year_finding(
+                    "the Elasticsearch date processor (java.time 'uu', base 2000)",
+                    "2000-2099",
+                    fixed_2000=True,
+                    path=rule.path,
+                    target=NAME,
+                    line=rule.line,
+                )
+            )
         if not fmt.usable:
             return False
         java = to_java_pattern(fmt)
