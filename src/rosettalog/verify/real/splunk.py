@@ -146,7 +146,7 @@ class SplunkSession:
         sourcetype = result.options["sourcetype"]
         self.install(result)
         source = f"/tmp/rosettalog-{secrets.token_hex(6)}.log"
-        with tempfile.NamedTemporaryFile("w", suffix=".log", delete=False) as fh:
+        with tempfile.NamedTemporaryFile("w", suffix=".log", delete=False, encoding="utf-8") as fh:
             fh.write("\n".join(logs) + "\n")
             local = fh.name
         try:
