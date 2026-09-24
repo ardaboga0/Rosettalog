@@ -42,6 +42,9 @@ No release has been tagged yet.
   2000–2099; behaviour is unchanged until QRadar CE results exist. Confirmation case 10 gains a
   year-50 line that separates the three hypotheses. A real-engine test measures Splunk's `%y`
   pivot.
+- Splunk's `%y` pivot was measured on Splunk 10.4.3 (real-engines run 35976943392): 50 → 2050,
+  68 → 2068, 69 → 1969, i.e. the POSIX strptime pivot. The Splunk `DATE_TWO_DIGIT_YEAR_PIVOT`
+  text now states the measurement instead of an assumption.
 - Assumptions can record `evidence_against` while unconfirmed. Reports, report JSON
   (`status_label`) and generated docs show "unconfirmed, evidence against". A11 uses it: Joda's
   default sliding window (1946–2045 in 2026) contradicts the assumed 2000–2099.

@@ -154,7 +154,7 @@ To reuse an engine you already run, set its URL (e.g. `ROSETTALOG_ELASTIC_URL`).
 | Engine | `yy` / `%y` expansion | Source |
 |---|---|---|
 | QRadar (Joda-Time `ext-data`) | Rosettalog assumes 2000–2099 (A11, unconfirmed). Joda's documented default is a sliding window from the current year −80 to +19 | Joda `DateTimeFormat.java`, `DateTimeFormatterBuilder.appendTwoDigitYear` |
-| Splunk `%y` | 69–99 → 19xx, 00–68 → 20xx (standard strptime). Undocumented by Splunk; measured by `tests/real/test_splunk_year_pivot.py` | props.conf reference (TIME_FORMAT = strptime) |
+| Splunk `%y` | 69–99 → 19xx, 00–68 → 20xx (standard strptime). Not documented by Splunk; **measured** on Splunk 10.4.3 with `strptime()`: 50 → 2050, 68 → 2068, 69 → 1969 (`tests/real/test_splunk_year_pivot.py`, real-engines run 35976943392) | Measurement; props.conf reference (TIME_FORMAT = strptime) |
 | Elasticsearch `uu` | 2000–2099 (base 2000) | JDK `DateTimeFormatter` |
 | KQL (generated) | 2000–2099 (`2000 + yy`, following A11) | Rosettalog |
 | Python `strptime` (reference) | 69–99 → 19xx, 00–68 → 20xx | python.org `time` docs |
