@@ -8,37 +8,43 @@
 # the Sigma taxonomy for `category: firewall` (src_ip, src_port, dst_ip, dst_port, username;
 # https://github.com/SigmaHQ/sigma-specification/blob/main/specification/sigma-appendix-taxonomy.md);
 # every other field has no taxonomy name and is passed through.
+# The `xdm` column holds Cortex XSIAM data model (XDM) fields, each checked against the published
+# schema (https://cortex-docs.paloaltonetworks.com/xsiam-data-model-schema/fields/source.md, …/target.md,
+# …/event.md, …/source/user.md, …/source/host.md, …/target/host.md). XDM accepts only schema
+# fields, so `null` here means the field stays in the raw dataset. Enum-typed fields
+# (xdm.network.ip_protocol, xdm.event.log_level) are not mapped from free text; EventName ->
+# original_event_type follows ASIM EventOriginalType / ECS event.code (maintainer decision).
 # `null` means "no well-defined equivalent": the field is emitted under its original
 # name and the report flags it (FIELD_UNMAPPED) so a human decides.
 #
 # These are *defaults*. They are intentionally conservative; open an issue if a mapping is wrong.
 fields:
-  EventName:            {asim: EventOriginalType,     cim: signature_id, ecs: event.code, sigma: null}
-  EventCategory:        {asim: EventOriginalSubType,  cim: category, ecs: null, sigma: null}
-  EventSeverity:        {asim: EventOriginalSeverity, cim: severity_id, ecs: event.severity, sigma: null}
-  SourceIp:             {asim: SrcIpAddr,             cim: src_ip, ecs: source.ip, sigma: src_ip}
-  SourcePort:           {asim: SrcPortNumber,         cim: src_port, ecs: source.port, sigma: src_port}
-  SourceIpPreNAT:       {asim: null,                  cim: null, ecs: null, sigma: null}
-  SourceIpPostNAT:      {asim: SrcNatIpAddr,          cim: src_translated_ip, ecs: source.nat.ip, sigma: null}
-  SourceMAC:            {asim: SrcMacAddr,            cim: src_mac, ecs: source.mac, sigma: null}
-  SourcePortPreNAT:     {asim: null,                  cim: null, ecs: null, sigma: null}
-  SourcePortPostNAT:    {asim: SrcNatPortNumber,      cim: src_translated_port, ecs: source.nat.port, sigma: null}
-  DestinationIp:        {asim: DstIpAddr,             cim: dest_ip, ecs: destination.ip, sigma: dst_ip}
-  DestinationPort:      {asim: DstPortNumber,         cim: dest_port, ecs: destination.port, sigma: dst_port}
-  DestinationIpPreNAT:  {asim: null,                  cim: null, ecs: null, sigma: null}
-  DestinationIpPostNAT: {asim: DstNatIpAddr,          cim: dest_translated_ip, ecs: destination.nat.ip, sigma: null}
-  DestinationPortPreNAT: {asim: null,                 cim: null, ecs: null, sigma: null}
-  DestinationPortPostNAT: {asim: DstNatPortNumber,    cim: dest_translated_port, ecs: destination.nat.port, sigma: null}
-  DestinationMAC:       {asim: DstMacAddr,            cim: dest_mac, ecs: destination.mac, sigma: null}
-  DeviceTime:           {asim: EventStartTime,        cim: _time, ecs: "@timestamp", sigma: null}
-  Protocol:             {asim: NetworkProtocol,       cim: transport, ecs: network.transport, sigma: null}
-  UserName:             {asim: User,                  cim: user, ecs: user.name, sigma: username}
-  HostName:             {asim: null,                  cim: null, ecs: null, sigma: null}
-  GroupName:            {asim: null,                  cim: null, ecs: null, sigma: null}
-  IdentityIp:           {asim: null,                  cim: null, ecs: null, sigma: null}
-  IdentityMac:          {asim: null,                  cim: null, ecs: null, sigma: null}
-  IdentityIpv6:         {asim: null,                  cim: null, ecs: null, sigma: null}
-  NetBIOSName:          {asim: null,                  cim: null, ecs: null, sigma: null}
-  ExtraIdentityData:    {asim: null,                  cim: null, ecs: null, sigma: null}
-  SourceIpv6:           {asim: SrcIpAddr,             cim: src_ip, ecs: source.ip, sigma: src_ip}
-  DestinationIpv6:      {asim: DstIpAddr,             cim: dest_ip, ecs: destination.ip, sigma: dst_ip}
+  EventName:            {asim: EventOriginalType,     cim: signature_id, ecs: event.code, sigma: null, xdm: xdm.event.original_event_type}
+  EventCategory:        {asim: EventOriginalSubType,  cim: category, ecs: null, sigma: null, xdm: null}
+  EventSeverity:        {asim: EventOriginalSeverity, cim: severity_id, ecs: event.severity, sigma: null, xdm: null}
+  SourceIp:             {asim: SrcIpAddr,             cim: src_ip, ecs: source.ip, sigma: src_ip, xdm: xdm.source.ipv4}
+  SourcePort:           {asim: SrcPortNumber,         cim: src_port, ecs: source.port, sigma: src_port, xdm: xdm.source.port}
+  SourceIpPreNAT:       {asim: null,                  cim: null, ecs: null, sigma: null, xdm: null}
+  SourceIpPostNAT:      {asim: SrcNatIpAddr,          cim: src_translated_ip, ecs: source.nat.ip, sigma: null, xdm: null}
+  SourceMAC:            {asim: SrcMacAddr,            cim: src_mac, ecs: source.mac, sigma: null, xdm: xdm.source.host.mac_addresses}
+  SourcePortPreNAT:     {asim: null,                  cim: null, ecs: null, sigma: null, xdm: null}
+  SourcePortPostNAT:    {asim: SrcNatPortNumber,      cim: src_translated_port, ecs: source.nat.port, sigma: null, xdm: null}
+  DestinationIp:        {asim: DstIpAddr,             cim: dest_ip, ecs: destination.ip, sigma: dst_ip, xdm: xdm.target.ipv4}
+  DestinationPort:      {asim: DstPortNumber,         cim: dest_port, ecs: destination.port, sigma: dst_port, xdm: xdm.target.port}
+  DestinationIpPreNAT:  {asim: null,                  cim: null, ecs: null, sigma: null, xdm: null}
+  DestinationIpPostNAT: {asim: DstNatIpAddr,          cim: dest_translated_ip, ecs: destination.nat.ip, sigma: null, xdm: null}
+  DestinationPortPreNAT: {asim: null,                 cim: null, ecs: null, sigma: null, xdm: null}
+  DestinationPortPostNAT: {asim: DstNatPortNumber,    cim: dest_translated_port, ecs: destination.nat.port, sigma: null, xdm: null}
+  DestinationMAC:       {asim: DstMacAddr,            cim: dest_mac, ecs: destination.mac, sigma: null, xdm: xdm.target.host.mac_addresses}
+  DeviceTime:           {asim: EventStartTime,        cim: _time, ecs: "@timestamp", sigma: null, xdm: null}
+  Protocol:             {asim: NetworkProtocol,       cim: transport, ecs: network.transport, sigma: null, xdm: null}
+  UserName:             {asim: User,                  cim: user, ecs: user.name, sigma: username, xdm: xdm.source.user.username}
+  HostName:             {asim: null,                  cim: null, ecs: null, sigma: null, xdm: null}
+  GroupName:            {asim: null,                  cim: null, ecs: null, sigma: null, xdm: null}
+  IdentityIp:           {asim: null,                  cim: null, ecs: null, sigma: null, xdm: null}
+  IdentityMac:          {asim: null,                  cim: null, ecs: null, sigma: null, xdm: null}
+  IdentityIpv6:         {asim: null,                  cim: null, ecs: null, sigma: null, xdm: null}
+  NetBIOSName:          {asim: null,                  cim: null, ecs: null, sigma: null, xdm: null}
+  ExtraIdentityData:    {asim: null,                  cim: null, ecs: null, sigma: null, xdm: null}
+  SourceIpv6:           {asim: SrcIpAddr,             cim: src_ip, ecs: source.ip, sigma: src_ip, xdm: xdm.source.ipv6}
+  DestinationIpv6:      {asim: DstIpAddr,             cim: dest_ip, ecs: destination.ip, sigma: dst_ip, xdm: xdm.target.ipv6}

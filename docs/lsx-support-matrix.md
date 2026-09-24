@@ -93,6 +93,28 @@ XSIAM output is **emulator-verified only**: there is no local XSIAM engine, and 
   (`XSIAM_YEAR_FROM_INGEST_TIME`).
 - Extracted fields are written to the raw dataset in snake_case (`SourceIp` becomes
   `source_ip`); `DeviceTime` becomes `_time`.
+- **Data Model Rules (XDM).** A second file, `<name>.model.xif`, maps raw columns to XDM with
+  `[MODEL: dataset="<target_dataset>"]`. Every field "must be part of the predefined field set of
+  the data model's schema"
+  ([MODEL](https://cortex-docs.paloaltonetworks.com/cortex-xsiam/configure-cortex-xsiam/data-management/data-model-rules/data-model-rules-file-structure-and-syntax/model.md)),
+  so only these mappings, each checked against the schema pages, are emitted. Every other field
+  stays in the raw dataset (`FIELD_UNMAPPED`); no XDM name is ever invented.
+
+  | Canonical | XDM | Conversion |
+  |---|---|---|
+  | SourceIp, SourceIpv6 | `xdm.source.ipv4`, `xdm.source.ipv6` | |
+  | SourcePort | `xdm.source.port` (Number) | `to_integer()` |
+  | DestinationIp, DestinationIpv6 | `xdm.target.ipv4`, `xdm.target.ipv6` | |
+  | DestinationPort | `xdm.target.port` (Number) | `to_integer()` |
+  | UserName | `xdm.source.user.username` ("the user who initiated the activity") | |
+  | SourceMAC, DestinationMAC | `xdm.source.host.mac_addresses`, `xdm.target.host.mac_addresses` (Array) | `arraycreate()` |
+  | EventName | `xdm.event.original_event_type` (maintainer decision; like ASIM `EventOriginalType`) | |
+  | DeviceTime | `_time` (XDM system field, mapped automatically) | |
+
+  `Protocol` and `EventSeverity` are not mapped: `xdm.network.ip_protocol` and
+  `xdm.event.log_level` are `XDM_CONST` enums, not free text. There are no NAT fields in
+  `xdm.source`/`xdm.target`. The conversions follow the idioms of Palo Alto's shipped Modeling
+  Rules.
 
 ## Java regex constructs
 

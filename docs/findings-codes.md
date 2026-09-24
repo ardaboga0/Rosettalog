@@ -160,6 +160,7 @@ XSIAM output is emulator-verified only; see the XSIAM section of
 | `XSIAM_REGEX_INLINE_FLAGS` | PARTIAL | The pattern sets flags inside the expression. RE2 supports them, but XQL's docs only describe a single leading `(?i)`. |
 | `XSIAM_STRING_LITERAL` | PARTIAL | Literal text has no documented XQL spelling: a line break, or a backslash before a quote or at the end. The candidate is left out. |
 | `XSIAM_YEAR_FROM_INGEST_TIME` | PARTIAL | The date has no year; the rule uses the ingestion time's year (`current_time()`). |
+| `XSIAM_XDM_MAPPED` | FULL | A Data Model Rule (`.model.xif`) maps the extracted fields that have an XDM equivalent, with the type conversions it needs (`to_integer` for ports, `arraycreate` for MAC addresses). `_time` is mapped automatically. Fields without an XDM equivalent get `FIELD_UNMAPPED` and stay in the raw dataset. |
 | `XSIAM_CASE_SENSITIVE` | FULL | The rule sets `config case_sensitive = true`, because XQL compares strings case-insensitively by default. |
 | `XSIAM_NO_HIT_KEEP` | FULL | `no_hit=keep`: logs the rule does not parse are still stored, with only `_raw_log`. |
 | `XSIAM_STRING_TYPES` | FULL | Extracted values are strings (`_time` is a timestamp). |

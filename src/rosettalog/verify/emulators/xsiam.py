@@ -31,17 +31,17 @@ from rosettalog.timefmt.joda import format_timestamp
 _TOKEN = re.compile(
     r"""
     (?P<ws>\s+|//[^\n]*)
-  | (?P<header>^\[INGEST:[^\]\n]*\])
+  | (?P<header>^\[(?:INGEST|MODEL):[^\]\n]*\])
   | (?P<string>"(?:[^"\\]|\\.)*")
   | (?P<number>\d+)
-  | (?P<ident>[A-Za-z_][A-Za-z0-9_]*)
+  | (?P<ident>[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)
   | (?P<op>->|!=|[=(),|;-])
     """,
     re.VERBOSE | re.MULTILINE,
 )
 _FUNCS = {
     "regexcapture", "if", "coalesce", "concat", "lowercase", "to_integer", "add", "mod",
-    "format_string", "format_timestamp", "current_time", "parse_timestamp",
+    "format_string", "format_timestamp", "current_time", "parse_timestamp", "arraycreate",
 }  # fmt: skip
 
 
@@ -160,11 +160,12 @@ class ParsingRule:
     """("alter", [(column, node)]) or ("fields-", [column])."""
 
 
-def parse_rule(text: str) -> ParsingRule:
+def parse_rule(text: str, section: str = "INGEST") -> ParsingRule:
     toks = lex(text)
-    if not toks or toks[0].kind != "header":
-        raise XsiamEmulationError("expected an [INGEST:...] header")
-    header = dict(re.findall(r'(\w+)\s*=\s*"?([^",\]]*)"?', toks[0].value[len("[INGEST:") : -1]))
+    if not toks or toks[0].kind != "header" or not toks[0].value.startswith(f"[{section}:"):
+        raise XsiamEmulationError(f"expected a [{section}:...] header")
+    body = toks[0].value[len(section) + 2 : -1]
+    header = dict(re.findall(r'(\w+)\s*=\s*"?([^",\]]*)"?', body))
     p = _Parser(toks[1:])
     case_sensitive = False
     stages: list[tuple[str, Any]] = []
@@ -299,6 +300,8 @@ class _Eval:
             return None if any(v is None for v in values) else "".join(str(v) for v in values)
         if name == "lowercase":
             return None if values[0] is None else str(values[0]).lower()
+        if name == "arraycreate":
+            return None if any(v is None for v in values) else list(values)
         if name == "to_integer":
             return None if values[0] is None else int(values[0])
         if name == "add":
@@ -337,23 +340,41 @@ class XsiamEmulator:
         if text is None:
             raise XsiamEmulationError("no parsing rule in the backend output")
         self.rule = parse_rule(text)
+        model = next((f.content for f in result.files if f.path.endswith(".model.xif")), None)
+        self.model = parse_rule(model, "MODEL") if model is not None else None
+        if self.model and self.model.header.get("dataset") != self.rule.header.get(
+            "target_dataset"
+        ):
+            raise XsiamEmulationError("the Data Model Rule does not model the parsed dataset")
         self.field_names = result.field_names
 
-    def extract(self, log: str, *, now: datetime) -> dict[str, str | None]:
-        row: dict[str, Any] = {"_raw_log": log}
-        ev = _Eval(row, self.rule.case_sensitive, now)
-        for kind, payload in self.rule.stages:
+    @staticmethod
+    def _run(rule: ParsingRule, row: dict[str, Any], now: datetime) -> None:
+        ev = _Eval(row, rule.case_sensitive, now)
+        for kind, payload in rule.stages:
             if kind == "alter":
                 computed = {name: ev(node) for name, node in payload}
                 row.update(computed)
             else:
                 for name in payload:
                     row.pop(name, None)
+
+    def extract(self, log: str, *, now: datetime) -> dict[str, str | None]:
+        """Parsed raw-dataset row, then (if present) the Data Model Rule's XDM fields.
+
+        An XDM array (MAC addresses) is reported as its elements joined with ",".
+        """
+        row: dict[str, Any] = {"_raw_log": log}
+        self._run(self.rule, row, now)
+        if self.model is not None:
+            self._run(self.model, row, now)
         out: dict[str, str | None] = {}
         for name in self.field_names.values():
             value = row.get(name)
             if isinstance(value, datetime):
                 out[name] = format_timestamp(value)
+            elif isinstance(value, list):
+                out[name] = ",".join(str(v) for v in value)
             else:
                 out[name] = None if value is None else str(value)
         return out
