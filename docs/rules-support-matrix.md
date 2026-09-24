@@ -119,5 +119,5 @@ in `tests/real/test_rules_differential.py` and listed here.
 | G1 | elasticsearch 2.1.1 (lucene, esql) | plain/`contains` values (case-insensitive in Sigma) | matched case-sensitively on keyword fields: `username\|contains: adm` misses `SysADM` | Elasticsearch 9.5.4, `examples/rules` e3 |
 | G2 | elasticsearch 2.1.1 (lucene, esql) | `\|re` with `^`/`$` | passed through unchanged, but Lucene regular expressions have no anchors and always match the whole value ([regexp syntax](https://www.elastic.co/docs/reference/query-languages/query-dsl/regexp-syntax)): `/^auth.../` matches nothing | Elasticsearch 9.5.4, `examples/rules` e4, e7 |
 
-Splunk 10.4.3 agreed with the Sigma rule on every example event. Kusto results come from the
-`real-engines` workflow (the Kusto emulator needs x86-64).
+Splunk 10.4.3 (local) and the Kusto emulator (`real-engines` workflow run 35982350005, x86-64)
+agreed with the Sigma rule on every example event.
