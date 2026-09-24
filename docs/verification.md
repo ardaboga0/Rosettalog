@@ -101,6 +101,8 @@ To reuse an engine you already run, set its URL (e.g. `ROSETTALOG_ELASTIC_URL`).
 |---|---|---|---|---|
 | elastic | `elastic` | `docker.elastic.co/elasticsearch/elasticsearch:9.5.4` (ingest `_simulate` API) | linux/amd64, linux/arm64 (native on Apple Silicon) | ~2 GB RAM (1 GB heap), ~2 GB image |
 | splunk | `splunk` | `splunk/splunk:10.4.3` (REST oneshot input + search export) | linux/amd64 only (Apple Silicon: Rosetta) | ~4 GB RAM, ~1.5 GB image; ~80 s to provision, ~60–80 s per artifact under Rosetta (a restart is needed per artifact) |
+| sentinel | `sentinel` (default) | Kusto emulator `mcr.microsoft.com/azuredataexplorer/kustainer-linux:latest@sha256:a44a0015…` (REST `/v1/rest/query`, `/v1/rest/mgmt`) | **linux/amd64 only, x86-64 CPU with SSE4.2/AVX2; ARM is not supported** (Microsoft docs), so it does not run on Apple Silicon, even with Rosetta | ≥ 4 GB RAM (`-m 4G`), image "several GBs"; license: `ACCEPT_EULA=Y` (Microsoft Software License Terms, which forbid benchmarking) |
+| sentinel | `sentinel-adx` (opt-in) | Your Azure Data Explorer cluster | any | None locally; **sends the synthetic samples to your cluster** |
 
 **How the Splunk runner reads results.**
 
@@ -130,10 +132,29 @@ To reuse an engine you already run, set its URL (e.g. `ROSETTALOG_ELASTIC_URL`).
 - To reuse a running instance, set `ROSETTALOG_SPLUNK_URL`, `ROSETTALOG_SPLUNK_PASSWORD` and
   `ROSETTALOG_SPLUNK_CONTAINER` (the runner copies files into that container and restarts it).
 
+**Kusto runners.**
+
+- Both runners ingest the samples into a uniquely named temporary table
+  (`.set-or-append … <| datatable(…)`). They run the generated file **unmodified**, preceded by
+  `let <source_table> = <temp table>;` (a `let` shadows the table name, so none of your tables
+  is read or written), and always drop the temporary table.
+- **Kusto emulator on Apple Silicon:** not possible. Microsoft states that "ARM processors
+  aren't supported" and that the emulator needs SSE4.2/AVX2, which Rosetta does not provide.
+  The runner refuses with that reason. Use a Linux x86-64 host, the `real-engines` GitHub
+  workflow (ubuntu-latest, x86-64), or the ADX runner.
+- **ADX runner (`--runner sentinel-adx`):** set `ROSETTALOG_ADX_CLUSTER` (https URL),
+  `ROSETTALOG_ADX_DATABASE` and `ROSETTALOG_ADX_TOKEN` (e.g.
+  `az account get-access-token --resource <cluster-url> --query accessToken -o tsv`). The token
+  needs rights to create and drop tables in that database. It is the **only** runner that sends
+  data off your machine, and it runs only when you set these variables.
+  **Status: tested only with a stubbed HTTP layer**; no real ADX cluster has been used yet.
+
 ### Running locally
 
 - **Linux:** Docker Engine; nothing else is needed.
 - **macOS (Apple Silicon included):** any Docker runtime. With Colima, amd64-only images (see
   the table) need Rosetta: `colima start --vm-type vz --vz-rosetta --cpu 4 --memory 8`.
+  Elasticsearch runs natively and Splunk runs under Rosetta. The Kusto emulator cannot run (ARM
+  is not supported): use the GitHub workflow, a Linux x86-64 host, or `--runner sentinel-adx`.
 - **CI:** `.github/workflows/real-engines.yml` runs the differential suite weekly and on demand
   (`workflow_dispatch` with a `targets` input). The default CI never starts containers.

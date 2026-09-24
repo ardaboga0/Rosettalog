@@ -24,6 +24,17 @@ No release has been tagged yet.
 - New findings: `VERIFY_REAL_MISMATCH`, `VERIFY_EMULATOR_DIVERGENCE`, `VERIFY_REAL_ENGINE_ERROR`,
   `VERIFY_REAL_NOT_COMPARABLE`, `ELASTIC_*` and `ONIG_*`.
 
+### Added (M4c)
+- Real KQL runners. `sentinel` uses the Kusto emulator (kustainer-linux pinned by digest,
+  `ACCEPT_EULA=Y`), is x86-64 with AVX2 only, and refuses ARM hosts with the documented reason.
+  `sentinel-adx` is opt-in and uses your Azure Data Explorer cluster via
+  `ROSETTALOG_ADX_CLUSTER/_DATABASE/_TOKEN`. Both ingest samples into a random temporary table,
+  run the generated KQL unmodified behind `let <table> = <temp>;`, and always drop the table.
+- `--runner` option on `rosettalog verify`, and a Sentinel job in the real-engines workflow.
+- Not yet run against a real engine: the Kusto emulator cannot run on the development Mac
+  (Apple Silicon), and no ADX cluster was available. Both runners are covered by stubbed-HTTP
+  unit tests. The CI job is the first real run.
+
 ### Added (M4b)
 - Real Splunk runner (`splunk/splunk:10.4.3`, amd64): installs the generated app with
   system-wide export, restarts so index-time settings apply, ingests via oneshot and reads

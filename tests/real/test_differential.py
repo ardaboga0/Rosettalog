@@ -15,6 +15,7 @@ import pytest
 
 from rosettalog.plugins import RealEngineSession, get_backend, get_runner
 from rosettalog.verify.harness import verify
+from rosettalog.verify.real.docker import docker_available
 from rosettalog.verify.samples import load_samples
 from tests.conftest import ROOT, parse_lsx, sample_sets
 
@@ -35,9 +36,10 @@ def real_session(request: pytest.FixtureRequest) -> Iterator[Callable[[str], Rea
             runner = get_runner(target)
             reason = runner.unavailable_reason()
             if reason is not None:
-                if "docker" in reason.lower():
+                if reason == docker_available():
+                    # Requested real-engine tests must not silently pass without Docker.
                     pytest.fail(f"real-engine tests requested but {reason}")
-                pytest.skip(f"{runner.name}: {reason}")
+                pytest.skip(f"{runner.name}: {reason}")  # e.g. Kusto emulator on ARM
             sessions[target] = stack.enter_context(runner.session())
         return sessions[target]
 

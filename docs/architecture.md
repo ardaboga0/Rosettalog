@@ -112,6 +112,10 @@ target engine. `rosettalog verify --engine real` uses them, as does the opt-in
   (`VERIFY_EMULATOR_DIVERGENCE`). It must be fixed together with a container-free regression
   test.
 - The core stays SIEM-agnostic: the harness only knows the runner protocol.
+- Runners today are `elastic` (Elasticsearch 9.5.4), `splunk` (Splunk 10.4.3, amd64),
+  `sentinel` (Kusto emulator, x86-64 with AVX2 only) and `sentinel-adx` (opt-in; your Azure Data
+  Explorer cluster, the only runner that sends data off the machine). See
+  [verification.md](verification.md) for images, platforms and resources.
 
 ## Verification and ground truth
 
