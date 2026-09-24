@@ -413,8 +413,8 @@ class SplunkBackend:
         if Comp.YEAR2 in fmt.components:
             findings.append(
                 two_digit_year_finding(
-                    "Splunk's %y (not documented by Splunk; standard strptime, checked by the "
-                    "real-engine test)",
+                    "Splunk's %y (not documented by Splunk; measured on Splunk 10.4.3 with "
+                    "strptime(): 50 -> 2050, 68 -> 2068, 69 -> 1969)",
                     "1969-2068 (69-99 -> 19xx, 00-68 -> 20xx)",
                     fixed_2000=False,
                     path=rule.path,

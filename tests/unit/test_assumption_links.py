@@ -156,3 +156,11 @@ def test_report_json_round_trips_with_status_label(tmp_path) -> None:
     report = run([parse_lsx(CASE06)], ["splunk"])
     again = MigrationReport.model_validate_json(render_json(report))
     assert again.unconfirmed_global_assumptions == report.unconfirmed_global_assumptions
+
+
+def test_splunk_pivot_finding_states_the_measurement() -> None:
+    """Measured on Splunk 10.4.3 (real-engines run 35976943392): 50->2050, 68->2068, 69->1969."""
+    result = SplunkBackend().generate(parse_lsx(CASE10), {})
+    finding = _find(result.findings, "DATE_TWO_DIGIT_YEAR_PIVOT")
+    assert "measured on Splunk 10.4.3" in finding.message
+    assert "69 -> 1969" in finding.message

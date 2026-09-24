@@ -115,7 +115,7 @@ assumptions:
       observed on QRadar.
     alternatives: >-
       Joda's sliding window (69 -> 1969, 50 -> 1950) or the POSIX strptime pivot (69 -> 1969,
-      50 -> 2050). Line 3 (year 50) tells all three apart.
+      50 -> 2050; measured for Splunk 10.4.3). Line 3 (year 50) tells all three apart.
     scope: per-artifact
     findings: [DATE_TWO_DIGIT_YEAR_PIVOT]
     topic: two-digit-year-pivot
