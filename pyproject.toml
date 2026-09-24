@@ -47,6 +47,7 @@ elastic = "rosettalog.verify.emulators.elastic:ElasticEmulator"
 
 [project.entry-points."rosettalog.runners"]
 elastic = "rosettalog.verify.real.elastic:ElasticRunner"
+splunk = "rosettalog.verify.real.splunk:SplunkRunner"
 
 [project.urls]
 Homepage = "https://github.com/ardaboga0/rosettalog"

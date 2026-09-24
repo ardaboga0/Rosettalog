@@ -106,6 +106,10 @@ A test (`tests/unit/test_docs.py`) checks that every code emitted by the source 
 | `SPLUNK_TIMESTAMP_UNSUPPORTED` | UNSUPPORTED | The timestamp is not a single capture group. |
 | `SPLUNK_INDEX_TIME_DEPENDENCY` | PARTIAL | A translated field (`_time` from DeviceTime) depends on index-time settings (`TIME_PREFIX`, `TIME_FORMAT`). These take effect only on the instance that parses the data (indexer or heavy forwarder), and only for events indexed after deployment. |
 | `SPLUNK_EVENT_BREAKING_ASSUMED` | FULL | `SHOULD_LINEMERGE = false` (one event per line) is an index-time setting and only affects newly indexed data. |
+| `SPLUNK_TIMESTAMP_FALLBACK` | PARTIAL | When `TIME_FORMAT` does not match, Splunk falls back to automatic timestamp recognition or the previous event's time, where QRadar leaves DeviceTime unset. |
+| `SPLUNK_YEAR_INFERENCE` | PARTIAL | The timestamp format has no year; Splunk infers it from neighbouring events (out-of-order events can be assigned the next year and rejected by `MAX_DAYS_HENCE`). |
+| `SPLUNK_KV_MODE_NONE` | FULL | `KV_MODE = none` disables Splunk's automatic key=value extraction for the sourcetype, so only translated fields appear. |
+| `SPLUNK_APP_SCOPE` | FULL | Search-time extractions deployed inside an app only apply in that app unless its knowledge objects are exported (`export = system`). |
 | `SPLUNK_INTERMEDIATE_FIELDS` | FULL | `rl_*` helper fields are visible at search time. |
 
 ## Elastic backend

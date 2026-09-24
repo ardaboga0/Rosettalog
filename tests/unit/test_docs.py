@@ -9,7 +9,13 @@ from tests.conftest import ROOT
 CODE = re.compile(
     r'"((?:LSX|RE2|REGEX|PCRE|ONIG|DATE|FIELD|KQL|ASIM|SPLUNK|ELASTIC|VERIFY|CANDIDATE|MATCHGROUP|TARGET|NO|EMULATION)_[A-Z0-9_]+)"'
 )
-NOT_CODES = {"ASIM_MANDATORY"}
+NOT_CODES = {
+    "ASIM_MANDATORY",
+    # Environment variables of the Splunk image, not finding codes:
+    "SPLUNK_GENERAL_TERMS",
+    "SPLUNK_PASSWORD",
+    "SPLUNK_START_ARGS",
+}
 
 
 def test_every_finding_code_is_documented() -> None:

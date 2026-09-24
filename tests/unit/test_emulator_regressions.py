@@ -44,3 +44,85 @@ def test_elastic_date_locale_english_is_rejected_by_real_engine() -> None:
     )
     with pytest.raises(ElasticEmulationError, match="locale"):
         ElasticEmulator(tampered)
+
+
+def test_splunk_auto_kv_extraction_is_disabled_and_not_emulated() -> None:
+    """Splunk 10.4.3: with the default KV_MODE=auto, 'user=alice' produced a `user` field from
+    automatic extraction although our transforms did not (sample 'tcp deny', field UserName
+    context). The backend now emits KV_MODE = none and the emulator refuses auto KV."""
+    from rosettalog.backends.splunk import SplunkBackend
+    from rosettalog.verify.emulators.splunk import SplunkEmulationError, SplunkEmulator
+
+    result = SplunkBackend().generate(parse_lsx(ACME), {"sourcetype": "acme:fw"})
+    props = next(f for f in result.files if f.path == "props.conf")
+    assert "KV_MODE = none" in props.content
+    SplunkEmulator(result)  # accepted
+    auto = result.model_copy(
+        update={
+            "files": [
+                f.model_copy(update={"content": f.content.replace("KV_MODE = none\n", "")})
+                for f in result.files
+            ]
+        }
+    )
+    with pytest.raises(SplunkEmulationError, match="KV_MODE"):
+        SplunkEmulator(auto)
+
+
+def test_splunk_named_groups_are_not_emitted() -> None:
+    """Splunk 10.4.3: `REGEX = \\buser=(?<user>[^\\s"]+)` with `FORMAT = rl_7_User::$1` created
+    a `user` field from the named group but no rl_7_User, so EVAL-user became null (sample
+    'tcp deny', field UserName) while the emulator gave 'alice'. Named groups are now emitted as
+    plain groups for PCRE, and the emulator refuses named groups in REGEX."""
+    from rosettalog.backends.splunk import SplunkBackend
+    from rosettalog.regex.translate import translate
+    from rosettalog.verify.emulators.splunk import SplunkEmulationError, SplunkEmulator
+
+    assert translate(r"\buser=(?<user>[^\s\"]+)", "pcre").pattern == r'\buser=([^\s"]+)'
+    assert translate(r"(a)(?<n>b)\k<n>", "pcre").pattern == r"(a)(b)\g{2}"
+    result = SplunkBackend().generate(parse_lsx(ACME), {"sourcetype": "acme:fw"})
+    transforms = next(f for f in result.files if f.path == "transforms.conf").content
+    import re
+
+    assert not re.search(r"\(\?P?<[A-Za-z]", transforms)  # no named groups (lookbehind is fine)
+    user = SplunkEmulator(result).extract(ACME_TCP_DENY, now=NOW)["user"]
+    assert user == "alice"
+    named = result.model_copy(
+        update={
+            "files": [
+                f.model_copy(update={"content": f.content.replace("user=(", "user=(?<user>")})
+                for f in result.files
+            ]
+        }
+    )
+    with pytest.raises(SplunkEmulationError, match="named capture"):
+        SplunkEmulator(named)
+
+
+def test_splunk_time_not_comparable_when_year_inferred_or_auto_recognised() -> None:
+    """Splunk 10.4.3 on the Tessivor samples: 'login fail' (format without year) got year 2027
+    from event order and was rejected; 'tunnel up' did not match TIME_FORMAT but Splunk's
+    automatic recognition found a timestamp. Neither is emulated, so the runner must report them
+    as not comparable instead of claiming an emulator divergence."""
+    from rosettalog.backends.splunk import SplunkBackend
+    from rosettalog.plugins import NotComparable
+    from rosettalog.verify.emulators.splunk import SplunkEmulator
+    from rosettalog.verify.real.splunk import time_value
+    from tests.conftest import FIXTURES
+
+    tessivor = SplunkBackend().generate(parse_lsx(FIXTURES / "tessivor_vpn.lsx.xml"), {})
+    ts = SplunkEmulator(tessivor).timestamp
+    row = {"timestartpos": "0", "rl_epoch": "1774340100"}
+    assert isinstance(time_value(row, "Mar 14 23:59:59 x", ts, NOW), NotComparable)
+    rejected = {"rl_epoch": "1774340100"}  # no timestartpos: Splunk rejected the inferred year
+    assert isinstance(time_value(rejected, "Mar 14 23:59:59 x", ts, NOW), NotComparable)
+    codes = {f.code for f in tessivor.findings}
+    assert {"SPLUNK_YEAR_INFERENCE", "SPLUNK_TIMESTAMP_FALLBACK"} <= codes
+
+    acme = SplunkBackend().generate(parse_lsx(ACME), {"sourcetype": "acme:fw"})
+    ts = SplunkEmulator(acme).timestamp
+    matched = {"timestartpos": "49", "rl_epoch": "1773480413.12"}
+    assert time_value(matched, ACME_TCP_DENY, ts, NOW) == "2026-03-14T09:26:53.120Z"
+    assert time_value({"rl_epoch": "1"}, "no timestamp", ts, NOW) is None
+    auto = {"timestartpos": "5", "rl_epoch": "1773480413"}
+    assert isinstance(time_value(auto, "no ts= here 2026-03-14 09:26:53", ts, NOW), NotComparable)

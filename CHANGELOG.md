@@ -24,6 +24,31 @@ No release has been tagged yet.
 - New findings: `VERIFY_REAL_MISMATCH`, `VERIFY_EMULATOR_DIVERGENCE`, `VERIFY_REAL_ENGINE_ERROR`,
   `VERIFY_REAL_NOT_COMPARABLE`, `ELASTIC_*` and `ONIG_*`.
 
+### Added (M4b)
+- Real Splunk runner (`splunk/splunk:10.4.3`, amd64): installs the generated app with
+  system-wide export, restarts so index-time settings apply, ingests via oneshot and reads
+  fields via search export. `_time` counts only with `timestartpos`; splunkd's certificate is
+  pinned. It has a weekly/manual workflow job.
+- Findings `SPLUNK_KV_MODE_NONE` and `SPLUNK_APP_SCOPE` (notes).
+- The runner waits for the image healthcheck and restarts with the CLI. An early REST restart
+  aborted provisioning, and the REST self-restart left splunkd down under Rosetta.
+- The Docker helper no longer uses `--rm`, so an engine that exits stays inspectable until
+  cleanup; `Container.healthy()` fails fast when a container has stopped.
+
+### Fixed (M4b), found by real-Splunk differential testing
+- props.conf now sets `KV_MODE = none`. Splunk's default automatic key=value extraction added
+  fields QRadar never extracts (e.g. `user`), and the emulator did not model that. The emulator
+  now refuses auto KV.
+- Named groups are no longer emitted in Splunk `REGEX`. Splunk extracted them as fields and
+  skipped `FORMAT $N`, which nulled `EVAL-user` on the Acme sample. The emulator refuses named
+  groups.
+
+- Real Splunk timestamps: year-less formats are inferred from event order (an out-of-order
+  sample got 2027 and was rejected), and when `TIME_FORMAT` fails Splunk falls back to automatic
+  recognition. Both are now reported (`SPLUNK_YEAR_INFERENCE`, `SPLUNK_TIMESTAMP_FALLBACK`, both
+  PARTIAL). The runner marks such `_time` values as not comparable instead of reporting a false
+  emulator divergence.
+
 ### Fixed (M4a)
 - The Elastic backend no longer sets `locale: ENGLISH` on date processors. Elasticsearch 9.5.4
   rejects that literal although the docs name it as the default; this was found by the first

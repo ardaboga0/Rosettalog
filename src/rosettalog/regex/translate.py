@@ -112,6 +112,8 @@ class _Unsupported(Exception):
 class _Ctx:
     target: Target
     issues: list[RegexIssue] = field(default_factory=list)
+    group_numbers: dict[str, int] = field(default_factory=dict)
+    """pcre only: Java group name -> number (names are dropped for Splunk, see _group_open)."""
     multiline: bool = False
     """onig only: the pattern turns on Java's MULTILINE flag somewhere."""
 
@@ -336,8 +338,10 @@ def _emit(tokens: list[Token], ctx: _Ctx) -> str:
                     )
                 if t == "onig":
                     out.append(f"\\k<{tok.ref}>")
+                elif isinstance(tok.ref, str) and t == "pcre":
+                    out.append(f"\\g{{{ctx.group_numbers[tok.ref]}}}")
                 elif isinstance(tok.ref, str):
-                    out.append(f"\\k<{tok.ref}>" if t == "pcre" else f"(?P={tok.ref})")
+                    out.append(f"(?P={tok.ref})")
                 else:
                     out.append(f"\\g{{{tok.ref}}}" if t == "pcre" else f"\\g<{tok.ref}>")
             case Kind.GROUP_OPEN:
@@ -423,7 +427,11 @@ def _group_open(tok: Token, tokens: list[Token], idx: int, ctx: _Ctx) -> str:
     if g is GroupKind.CAPTURE:
         return "("
     if g is GroupKind.NAMED:
-        return f"(?<{tok.name}>" if t in ("pcre", "onig") else f"(?P<{tok.name}>"
+        if t == "pcre":
+            # Splunk turns named groups in a transform's REGEX into fields and then does not
+            # apply FORMAT $N (found with Splunk 10.4.3), so named groups become plain groups.
+            return "("
+        return f"(?<{tok.name}>" if t == "onig" else f"(?P<{tok.name}>"
     if g is GroupKind.NONCAPTURE:
         return "(?:"
     if g is GroupKind.SCOPED_FLAGS:
@@ -521,6 +529,12 @@ def _uses_multiline(tokens: list[Token]) -> bool:
 def translate_tokens(tokens: list[Token], target: Target) -> RegexTranslation:
     """Translate an already tokenized pattern (or a slice of one) without validation."""
     ctx = _Ctx(target, multiline=target == "onig" and _uses_multiline(tokens))
+    number = 0
+    for tok in tokens:
+        if tok.kind is Kind.GROUP_OPEN and tok.group in (GroupKind.CAPTURE, GroupKind.NAMED):
+            number += 1
+            if tok.group is GroupKind.NAMED:
+                ctx.group_numbers[tok.name] = number
     try:
         text = _emit(tokens, ctx)
     except _Unsupported as exc:

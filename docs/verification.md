@@ -100,6 +100,35 @@ To reuse an engine you already run, set its URL (e.g. `ROSETTALOG_ELASTIC_URL`).
 | Target | Runner | Image (pinned) | Platforms | Resources |
 |---|---|---|---|---|
 | elastic | `elastic` | `docker.elastic.co/elasticsearch/elasticsearch:9.5.4` (ingest `_simulate` API) | linux/amd64, linux/arm64 (native on Apple Silicon) | ~2 GB RAM (1 GB heap), ~2 GB image |
+| splunk | `splunk` | `splunk/splunk:10.4.3` (REST oneshot input + search export) | linux/amd64 only (Apple Silicon: Rosetta) | ~4 GB RAM, ~1.5 GB image; ~80 s to provision, ~60–80 s per artifact under Rosetta (a restart is needed per artifact) |
+
+**How the Splunk runner reads results.**
+
+- The generated `props.conf`/`transforms.conf` are installed as app `rosettalog_verify`, with
+  knowledge objects exported system-wide (without `export = system`, search-time extractions
+  in an app apply only inside that app).
+- Splunk is restarted, and only then are the samples ingested. Index-time settings
+  (`SHOULD_LINEMERGE`, `TIME_PREFIX`, `TIME_FORMAT`) therefore apply to them, just as they would
+  for data indexed after deployment.
+- `_time` counts as extracted only if Splunk reports `timestartpos`, i.e. it found the timestamp
+  in the event. Otherwise it is "no value", not the index time.
+- The report's **Scope** column shows, per field, whether it came from an index-time or a
+  search-time setting.
+- License acceptance uses only the documented variables `SPLUNK_START_ARGS=--accept-license`
+  and `SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com`. A random admin password is
+  generated per run.
+- splunkd's TLS certificate is read from the container and pinned; verification is never
+  disabled.
+- The runner waits for the image's healthcheck (its Ansible provisioning) before touching
+  Splunk. Restarting earlier makes the container exit. Restarts use the synchronous
+  `splunk restart` CLI inside the container; the REST self-restart sometimes left splunkd down
+  under Rosetta.
+- **Where to run the full suite:** on Apple Silicon, Splunk runs emulated and needs about a minute
+  per artifact, so run a subset locally
+  (`-k "splunk and (acme or tessivor)"`) and the full suite through the `real-engines`
+  workflow on GitHub's x86-64 runners.
+- To reuse a running instance, set `ROSETTALOG_SPLUNK_URL`, `ROSETTALOG_SPLUNK_PASSWORD` and
+  `ROSETTALOG_SPLUNK_CONTAINER` (the runner copies files into that container and restarts it).
 
 ### Running locally
 

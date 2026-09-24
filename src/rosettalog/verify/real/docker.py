@@ -69,11 +69,42 @@ class Container:
         # e.g. "127.0.0.1:55012"
         return int(out.strip().splitlines()[0].rsplit(":", 1)[1])
 
-    def exec(self, *args: str, timeout: float = 600) -> str:
-        return _run(["exec", self.name, *args], timeout=timeout)
+    def exec(self, *args: str, user: str | None = None, timeout: float = 600) -> str:
+        opts = ["-u", user] if user else []
+        return _run(["exec", *opts, self.name, *args], timeout=timeout)
 
     def copy_in(self, source: str, dest: str) -> None:
         _run(["cp", source, f"{self.name}:{dest}"])
+
+    def healthy(self) -> bool:
+        """True once the image's HEALTHCHECK reports healthy; raises if the container stopped."""
+        out = _run(
+            [
+                "inspect",
+                "-f",
+                "{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}",
+                self.name,
+            ]
+        )
+        status, _, health = out.strip().partition(" ")
+        if status != "running":
+            raise RealEngineError(f"container {self.name} is {self.state()}")
+        return health == "healthy"
+
+    def state(self) -> str:
+        proc = subprocess.run(
+            [
+                "docker",
+                "inspect",
+                "-f",
+                "{{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}}",
+                self.name,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return proc.stdout.strip() or proc.stderr.strip()
 
     def logs_tail(self, lines: int = 40) -> str:
         proc = subprocess.run(
@@ -96,7 +127,9 @@ def container(
     prefix: str = "rosettalog",
 ) -> Iterator[Container]:
     name = f"{prefix}-{secrets.token_hex(4)}"
-    args = ["run", "-d", "--rm", "--name", name, "--label", LABEL]
+    # No --rm: if the engine exits unexpectedly, its state and logs stay inspectable until the
+    # context removes the container in `finally`.
+    args = ["run", "-d", "--name", name, "--label", LABEL]
     if platform:
         args += ["--platform", platform]
     if memory:

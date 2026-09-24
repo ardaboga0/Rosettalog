@@ -267,6 +267,30 @@ class SplunkBackend:
                 target=NAME,
             )
         )
+        findings.append(
+            Finding(
+                status=Status.FULL,
+                code="SPLUNK_KV_MODE_NONE",
+                path="",
+                message="props.conf sets KV_MODE = none: Splunk's automatic key=value extraction "
+                "is disabled for this sourcetype, so only the translated fields appear (with "
+                "KV_MODE=auto, e.g. 'user=alice' would populate 'user' even where the LSX does "
+                "not extract it).",
+                suggestion="Remove it only if you want Splunk's automatic fields in addition.",
+                target=NAME,
+            )
+        )
+        findings.append(
+            Finding(
+                status=Status.FULL,
+                code="SPLUNK_APP_SCOPE",
+                path="",
+                message="If you deploy these files inside a Splunk app, export its knowledge "
+                "objects (metadata: export = system); otherwise the search-time extractions only "
+                "apply to searches run in that app.",
+                target=NAME,
+            )
+        )
         if any(t.format.startswith("rl_") or " rl_" in t.format for t in r.transforms):
             findings.append(
                 Finding(
@@ -321,6 +345,14 @@ class SplunkBackend:
             )
             for key, _ in index_time
         ]
+        out.append(
+            DeploymentSetting(
+                scope="search-time",
+                file="props.conf",
+                setting="KV_MODE",
+                note="automatic key=value extraction disabled",
+            )
+        )
         out += [
             DeploymentSetting(
                 scope="search-time",
@@ -395,6 +427,31 @@ class SplunkBackend:
         else:
             settings.append(("TIME_PREFIX", conf_value(prefix)))
         settings.append(("TIME_FORMAT", fmt.strptime))
+        findings.append(
+            Finding(
+                status=Status.PARTIAL,
+                code="SPLUNK_TIMESTAMP_FALLBACK",
+                path=rule.path,
+                message="When TIME_FORMAT does not match an event, Splunk falls back to automatic "
+                "timestamp recognition or the previous event's time, where QRadar would leave "
+                "DeviceTime unset (observed with Splunk 10.4.3).",
+                target=NAME,
+                line=rule.line,
+            )
+        )
+        if not fmt.has_year:
+            findings.append(
+                Finding(
+                    status=Status.PARTIAL,
+                    code="SPLUNK_YEAR_INFERENCE",
+                    path=rule.path,
+                    message="The timestamp has no year: Splunk infers it from neighbouring "
+                    "events, so an out-of-order event can get the next year and be rejected by "
+                    "MAX_DAYS_HENCE (observed with Splunk 10.4.3).",
+                    target=NAME,
+                    line=rule.line,
+                )
+            )
         findings.append(
             Finding(
                 status=Status.PARTIAL,
@@ -478,6 +535,9 @@ class SplunkBackend:
             "# ---- Search-time extractions ---------------------------------------------------",
             "# Deploy to search heads. They apply at search time to all events of this",
             "# sourcetype, including data indexed before deployment.",
+            "# KV_MODE = none: Splunk's automatic key=value extraction would add fields QRadar",
+            "# never extracted (e.g. user=... -> user), masking the translated extractions.",
+            "KV_MODE = none",
         ]
         if transforms:
             lines.append(f"REPORT-rl_{artifact.id} = " + ", ".join(t.name for t in transforms))

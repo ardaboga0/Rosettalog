@@ -15,6 +15,7 @@ from rosettalog.regex.translate import translate
         (r"(?<=u=\s*)\w+", "pcre", Status.PARTIAL, "PCRE_VARIABLE_LOOKBEHIND", None),
         (r"(a)\1", "re2", Status.UNSUPPORTED, "RE2_NO_BACKREFERENCE", None),
         (r"(a)\1", "pcre", Status.FULL, None, r"(a)\g{1}"),
+        (r"(?<n>a)\k<n>", "pcre", Status.FULL, None, r"(a)\g{1}"),
         (r"(?<n>a)\k<n>", "python", Status.FULL, None, r"(?P<n>a)(?P=n)"),
         (r"a++b", "re2", Status.PARTIAL, "RE2_POSSESSIVE_APPROX", "a+b"),
         (r"a++b", "pcre", Status.FULL, None, "a++b"),
@@ -36,7 +37,7 @@ from rosettalog.regex.translate import translate
         (r"a{2000}", "re2", Status.UNSUPPORTED, "RE2_REPEAT_LIMIT", None),
         (r"(unclosed", "pcre", Status.UNSUPPORTED, "REGEX_PARSE_ERROR", None),
         (r"(?<name>x)", "re2", Status.FULL, None, "(?P<name>x)"),
-        (r"(?<name>x)", "pcre", Status.FULL, None, "(?<name>x)"),
+        (r"(?<name>x)", "pcre", Status.FULL, None, "(x)"),  # Splunk: FORMAT needs numbered groups
     ],
 )
 def test_translation(pattern, target, status, code, expected) -> None:
