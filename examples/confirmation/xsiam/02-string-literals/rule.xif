@@ -1,0 +1,11 @@
+// Rosettalog XSIAM confirmation case X02 (synthetic). See README.md.
+[INGEST:vendor="rosettalog", product="rl_x02", target_dataset="rosettalog_rl_x02_raw", no_hit=keep]
+config case_sensitive = true
+| alter
+    _q = regexcapture(_raw_log, "(?P<m>q=\"(?P<g1>[^\"]*)\")"),
+    _d = regexcapture(_raw_log, "(?P<m>dir=(?P<g1>\w+)\\(?P<g2>\w+))")
+| alter
+    a = _q -> g1,
+    b = _d -> g2,
+    c = "say \"hi\" \d"
+| fields - _q, _d;

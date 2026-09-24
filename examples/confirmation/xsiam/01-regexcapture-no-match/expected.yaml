@@ -1,0 +1,33 @@
+# XSIAM confirmation case X01: the values Rosettalog's emulator (its current reading of
+# XSIAM) produces. After running Simulate, record what XSIAM shows and set
+# ground_truth_source to e.g. "observed on Cortex XSIAM <version>, Simulate".
+reference_time: '2026-06-01T00:00:00Z'
+samples:
+- name: line 1
+  log: rltest x01 user=alice
+  ground_truth_source: 'assumed: Rosettalog''s current reading of XSIAM; to be confirmed with Simulate'
+  expected:
+    matched: 'yes'
+    user: alice
+    opt: no match
+- name: line 2
+  log: rltest x01 nothing here
+  ground_truth_source: 'assumed: Rosettalog''s current reading of XSIAM; to be confirmed with Simulate'
+  expected:
+    matched: 'no'
+    user: null
+    opt: no match
+- name: line 3
+  log: rltest x01 id=7
+  ground_truth_source: 'assumed: Rosettalog''s current reading of XSIAM; to be confirmed with Simulate'
+  expected:
+    matched: 'no'
+    user: null
+    opt: 'null'
+- name: line 4
+  log: rltest x01 id=8,x
+  ground_truth_source: 'assumed: Rosettalog''s current reading of XSIAM; to be confirmed with Simulate'
+  expected:
+    matched: 'no'
+    user: null
+    opt: x

@@ -213,8 +213,10 @@ def _run(
                 )
                 continue
             result = backend.generate(artifact, options.get(target, {}))
+            target_provider = getattr(backend, "assumptions", None)
+            target_set = target_provider() if target_provider else None
             findings = resolve_dependencies(
-                list(result.findings), assumption_set(artifact.source_format)
+                list(result.findings), [assumption_set(artifact.source_format), target_set]
             )
             verification = None
             rule_verification = None
@@ -255,4 +257,8 @@ def _run(
     report.unconfirmed_global_assumptions = open_global_assumptions(
         {a.source_format for a in artifacts}
     )
+    for backend in backends.values():  # targets that rely on undocumented engine behaviour
+        provider = getattr(backend, "assumptions", None)
+        if provider is not None:
+            report.unconfirmed_global_assumptions.extend(provider().open_global())
     return report

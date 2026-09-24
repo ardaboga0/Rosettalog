@@ -52,6 +52,17 @@ Report your results in an issue using
 [`RESULTS-TEMPLATE.md`](examples/confirmation/RESULTS-TEMPLATE.md), with your QRadar version.
 Even a single confirmed case helps.
 
+### Help confirm Cortex XSIAM's behaviour
+
+The XSIAM output relies on five XSIAM behaviours (X01-X05) that Palo Alto's documentation does
+not state, e.g. what `regexcapture()` returns when nothing matches. If you have an **XSIAM
+tenant**, the [XSIAM confirmation pack](examples/confirmation/xsiam/README.md) has one minimal
+parsing rule, sample lines and expected values per behaviour:
+
+1. Send `sample.log` to an HTTP log collector with `examples/confirmation/xsiam/send.sh`.
+2. Paste `rule.xif` into the Parsing Rules editor and run **Simulate** on those lines.
+3. Compare with `expected.yaml` and report the result in an issue, with your XSIAM version.
+
 ## What it does
 
 Rosettalog is an open-source, community-driven migration toolkit for SOC and detection

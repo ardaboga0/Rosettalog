@@ -42,7 +42,9 @@ core value is migrating *parsing logic* with honest findings and field-level ver
   - XDM fields must exist in the schema, so never invent them.
 
   Undocumented behaviour may only be relied on when Palo Alto's shipped content
-  (`demisto/content`) evidences it, and then with a finding.
+  (`demisto/content`) evidences it, and then with a finding. The `xsiam` tenant runner is like
+  `sentinel-adx`: it sends data off the machine only when the user configures it, uses only
+  synthetic samples, never runs on a schedule or on pull requests, and is stub-tested only.
 
 ## Non-negotiable rules
 

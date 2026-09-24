@@ -42,8 +42,10 @@ from rosettalog.backends.common import (
     slugify,
     two_digit_year_finding,
 )
+from rosettalog.backends.xsiam.unknowns import xsiam_unknowns
 from rosettalog.ir import (
     Artifact,
+    AssumptionDependency,
     Capture,
     Coalesce,
     Expr,
@@ -57,8 +59,10 @@ from rosettalog.ir import (
     ParseTime,
     Status,
     Template,
+    Variant,
     pattern_ids,
 )
+from rosettalog.ir.assumptions import AssumptionSet
 from rosettalog.ir.fields import field_table
 from rosettalog.plugins import BackendResult, DeploymentSetting, GeneratedFile
 from rosettalog.regex.xql import XqlPattern, group_name, to_xql, xql_regex_literal
@@ -139,17 +143,50 @@ class _Patterns:
             pattern = self.spec.patterns[pid]
             line = pattern.provenance.line if pattern.provenance else None
             for issue in tr.issues:
+                message = f"{issue.message} Affects: {fields}."
+                depends = None
+                if issue.code == "XSIAM_REGEX_INLINE_FLAGS":
+                    depends = linked(
+                        "xsiam-inline-flags",
+                        message,
+                        confirmed=(
+                            Status.FULL,
+                            f"Inline regex flags work in XSIAM. Affects: {fields}.",
+                        ),
+                        refuted=(
+                            Status.UNSUPPORTED,
+                            f"XSIAM does not accept inline regex flags; this pattern fails. "
+                            f"Affects: {fields}.",
+                        ),
+                    )
                 out.append(
                     Finding(
                         status=issue.status,
                         code=issue.code,
                         path=f"pattern[id={pid}]",
-                        message=f"{issue.message} Affects: {fields}.",
+                        message=message,
                         target=NAME,
                         line=line,
+                        depends_on=depends,
                     )
                 )
         return out
+
+
+def linked(
+    topic: str,
+    unconfirmed: str,
+    *,
+    confirmed: tuple[Status, str],
+    refuted: tuple[Status, str],
+) -> AssumptionDependency:
+    """A dependency on an XSIAM unknown (``unknowns.yaml``) that is still unconfirmed."""
+    return AssumptionDependency(
+        topic=topic,
+        unconfirmed=Variant(status=Status.PARTIAL, message=unconfirmed),
+        confirmed=Variant(status=confirmed[0], message=confirmed[1]),
+        refuted=Variant(status=refuted[0], message=refuted[1]),
+    )
 
 
 @dataclass
@@ -363,6 +400,10 @@ class XsiamBackend:
     def supports(self, artifact: Artifact) -> bool:
         return artifact_ready(artifact)
 
+    def assumptions(self) -> AssumptionSet:
+        """Undocumented XSIAM behaviour the output relies on (target-side registry)."""
+        return xsiam_unknowns()
+
     def generate(self, artifact: Artifact, options: Mapping[str, str]) -> BackendResult:
         spec = artifact.parser
         if spec is None:
@@ -493,6 +534,35 @@ class XsiamBackend:
                 continue
             if xdm in XDM_CASTS:
                 casts.append(f"{xdm} ({XDM_CASTS[xdm].format('...')})")
+            if XDM_CASTS.get(xdm, "").startswith("to_integer"):
+                head = (
+                    f"'{canonical}' becomes the Number field {xdm} through to_integer(): the "
+                    'text is normalised, e.g. "0443" becomes 443, so the modeled value can '
+                    "differ from QRadar's text."
+                )
+                findings.append(
+                    Finding(
+                        status=Status.PARTIAL,
+                        code="XSIAM_XDM_INTEGER_NORMALIZATION",
+                        path=f"field[{canonical}]",
+                        message=f"{head} A non-numeric value is assumed to become null.",
+                        suggestion=f"Keep the raw column '{column}' if the exact text matters.",
+                        target=NAME,
+                        depends_on=linked(
+                            "xsiam-to-integer",
+                            f"{head} A non-numeric value is assumed to become null.",
+                            confirmed=(
+                                Status.PARTIAL,
+                                f"{head} A non-numeric value becomes null.",
+                            ),
+                            refuted=(
+                                Status.PARTIAL,
+                                f"{head} A non-numeric value makes XSIAM reject the modeled "
+                                "event; check the parsing and modeling errors.",
+                            ),
+                        ),
+                    )
+                )
             assigns.append(f"{xdm} = {XDM_CASTS.get(xdm, '{}').format(column)}")
             mapped[canonical] = xdm
         if not assigns:
@@ -530,7 +600,8 @@ class XsiamBackend:
                 "rule was checked with Rosettalog's emulator of the documented XQL behaviour, not "
                 "on a tenant.",
                 suggestion="Paste the rule into the Parsing Rules editor and check it with "
-                "Simulate on real logs before deploying.",
+                "Simulate on real logs before deploying, or verify it on your tenant with "
+                "`rosettalog verify --engine real --runner xsiam` (see docs/verification.md).",
                 target=NAME,
             ),
             Finding(
@@ -567,15 +638,29 @@ class XsiamBackend:
             ),
         ]
         if uses_regex:
+            relies = (
+                "The rule relies on regexcapture() returning an empty object when the pattern "
+                "does not match, so that 'obj -> m' is null."
+            )
             out.append(
                 Finding(
                     status=Status.PARTIAL,
                     code="XSIAM_REGEXCAPTURE_SEMANTICS",
                     path="",
-                    message="The rule relies on regexcapture() returning an empty object when the "
-                    "pattern does not match, so that 'obj -> m' is null. Palo Alto's shipped "
-                    'rules test exactly this (to_string(x) = "{}"), but it is not documented.',
+                    message=f"{relies} Palo Alto's shipped rules test exactly this "
+                    '(to_string(x) = "{}"), but it is not documented.',
                     target=NAME,
+                    depends_on=linked(
+                        "xsiam-regexcapture",
+                        f"{relies} Palo Alto's shipped rules test exactly this "
+                        '(to_string(x) = "{}"), but it is not documented.',
+                        confirmed=(Status.FULL, f"{relies} XSIAM does this."),
+                        refuted=(
+                            Status.UNSUPPORTED,
+                            f"{relies} XSIAM does not, so the generated rule cannot tell "
+                            "whether a pattern matched.",
+                        ),
+                    ),
                 )
             )
         return out

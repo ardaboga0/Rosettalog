@@ -116,6 +116,23 @@ XSIAM output is **emulator-verified only**: there is no local XSIAM engine, and 
   `xdm.source`/`xdm.target`. The conversions follow the idioms of Palo Alto's shipped Modeling
   Rules.
 
+### XSIAM behaviour awaiting confirmation
+
+These are undocumented XSIAM behaviours the backend and emulator rely on. Findings that depend
+on one follow its status; the global ones are listed in every report with an XSIAM target.
+There is a confirmation case for each in [`examples/confirmation/xsiam/`](../examples/confirmation/xsiam/README.md),
+checked with the Parsing Rules editor's Simulate view.
+
+<!-- BEGIN GENERATED: xsiam-unknowns (from src/rosettalog/backends/xsiam/unknowns.yaml; regenerate with `uv run python -m rosettalog.backends.xsiam.docs_sync`) -->
+| ID | Question | Current assumption | Scope / finding | Case | Status |
+|---|---|---|---|---|---|
+| X01 | What does regexcapture() return when the pattern does not match, and what does a named group that did not participate read as? | An empty object, so 'obj -> m' is null (shipped rules test to_string(x) = "{}"); a group that did not participate reads as null. The generated rules treat null and "" alike for groups, so only the no-match case matters. | per artifact: `XSIAM_REGEXCAPTURE_SEMANTICS` | [01](../examples/confirmation/xsiam/01-regexcapture-no-match) | unconfirmed |
+| X02 | In XQL string literals, are backslashes passed through unchanged, with \" as the only escape (a double quote)? | Yes (563 uses of \" and patterns like "[\\/]" in shipped rules). Every generated regex relies on it. | global: listed in every report with an XSIAM target | [02](../examples/confirmation/xsiam/02-string-literals) | unconfirmed |
+| X03 | Does an inline flag in the middle of a pattern, e.g. (?i) after some text, work? | Yes, as in RE2. The docs only describe one leading (?i), so the backend reports patterns that need it. | per artifact: `XSIAM_REGEX_INLINE_FLAGS` | [03](../examples/confirmation/xsiam/03-inline-flags) | unconfirmed |
+| X04 | Do format_string("%04d-%02d-%02d %02d:%02d:%02d", ...) and parse_timestamp("%Y-%m-%d %H:%M:%E*S", ..., "+03:00") together give the documented result, including fractions? | Yes: the timestamp is 2026-03-05 06:07:03.120 UTC. Every translated DeviceTime relies on this construction. | global: listed in every report with an XSIAM target | [04](../examples/confirmation/xsiam/04-timestamp-normalization) | unconfirmed |
+| X05 | Does to_integer() turn "0443" into 443, and a non-numeric value into null without rejecting the event? | Yes. Data Model Rules convert ports with to_integer(), so "0443" becomes 443 (reported) and a non-numeric port becomes null. | per artifact: `XSIAM_XDM_INTEGER_NORMALIZATION` | [05](../examples/confirmation/xsiam/05-to-integer) | unconfirmed |
+<!-- END GENERATED: xsiam-unknowns -->
+
 ## Java regex constructs
 
 | Construct | RE2 (KQL, XSIAM) | PCRE (Splunk) | Oniguruma (Elastic grok) |

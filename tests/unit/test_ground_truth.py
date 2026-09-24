@@ -61,7 +61,8 @@ def test_ground_truth_problems() -> None:
 
 def test_confirmation_sample_log_matches_samples_yaml() -> None:
     """The file sent to QRadar and the file used by `rosettalog verify` must stay identical."""
-    cases = sorted(p for p in (ROOT / "examples" / "confirmation").iterdir() if p.is_dir())
+    confirmation = ROOT / "examples" / "confirmation"
+    cases = sorted(p for p in confirmation.iterdir() if p.is_dir() and p.name != "xsiam")
     assert len(cases) >= 13
     for case in cases:
         sent = (case / "sample.log").read_text(encoding="utf-8").splitlines()

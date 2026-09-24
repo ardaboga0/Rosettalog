@@ -7,6 +7,7 @@ An assumption leaves the report automatically once its ``status`` becomes ``conf
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from importlib import resources
 from typing import Any, Literal
 
@@ -73,9 +74,17 @@ class AssumptionSet(BaseModel):
         return [a for a in self.assumptions if a.scope == "global" and a.status != "confirmed"]
 
 
-def resolve_dependencies(findings: list[Finding], aset: AssumptionSet | None) -> list[Finding]:
-    """Give findings that depend on an assumption the status and text for its current status."""
-    by_topic = {a.topic: a for a in aset.assumptions if a.topic} if aset else {}
+def resolve_dependencies(
+    findings: list[Finding], asets: AssumptionSet | Sequence[AssumptionSet | None] | None
+) -> list[Finding]:
+    """Give findings that depend on an assumption the status and text for its current status.
+
+    ``asets`` are the registries that apply: the source frontend's (QRadar semantics) and, for
+    targets without a local engine, the backend's own (e.g. undocumented XSIAM behaviour).
+    """
+    if asets is None or isinstance(asets, AssumptionSet):
+        asets = [asets]
+    by_topic = {a.topic: a for s in asets if s for a in s.assumptions if a.topic}
     out: list[Finding] = []
     for finding in findings:
         dep = finding.depends_on

@@ -303,7 +303,9 @@ class _Eval:
         if name == "arraycreate":
             return None if any(v is None for v in values) else list(values)
         if name == "to_integer":
-            return None if values[0] is None else int(values[0])
+            # X05 (unconfirmed): non-numeric text becomes null rather than an error
+            text = None if values[0] is None else str(values[0]).strip()
+            return int(text) if text and text.lstrip("+-").isdigit() else None
         if name == "add":
             return None if None in values else values[0] + values[1]
         if name == "mod":

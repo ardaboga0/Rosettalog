@@ -67,6 +67,7 @@ elastic = "rosettalog.verify.real.elastic:ElasticRunner"
 splunk = "rosettalog.verify.real.splunk:SplunkRunner"
 sentinel = "rosettalog.verify.real.kusto:KustainerRunner"
 sentinel-adx = "rosettalog.verify.real.kusto:AdxRunner"
+xsiam = "rosettalog.verify.real.xsiam:XsiamRunner"
 
 [project.urls]
 Homepage = "https://github.com/ardaboga0/Rosettalog"

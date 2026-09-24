@@ -73,6 +73,30 @@ own emulator (`verify/emulators/xsiam.py`), which is a **weaker tier** than the 
 - The emulator uses real RE2, the engine XQL documents, so regex behaviour is not a guess.
 - Before deploying, check the rule with the Parsing Rules editor's **Simulate** on real logs.
 
+**Opt-in tenant runner (`--runner xsiam`).** If you have a tenant, the runner can compare
+the rule's real output with the emulator. It is covered by stubbed-HTTP tests only; it has
+never run against a tenant.
+
+1. **Install the rules yourself.** Paste the generated `.xif` Parsing Rule, and the
+   `.model.xif` Data Model Rule if there is one, into the tenant's editors. Use a dedicated
+   HTTP log collector (Raw format) whose vendor/product match `-O xsiam.vendor=` and
+   `-O xsiam.product=`, and a dedicated dataset. No documented API installs rules.
+2. **Configure** `ROSETTALOG_XSIAM_API_URL` (`https://api-<tenant>`),
+   `ROSETTALOG_XSIAM_API_KEY` and `_API_KEY_ID` (a standard API key), `_COLLECTOR_URL`
+   (`https://api-<tenant>/logs/v1/event`), `_COLLECTOR_KEY` and `_DATASET`.
+3. **Run**
+   `rosettalog verify <lsx> -s <samples> --to xsiam --engine real --runner xsiam
+   -O xsiam.vendor=... -O xsiam.product=... -O xsiam.target_dataset=$ROSETTALOG_XSIAM_DATASET`.
+   The runner sends **only the synthetic samples** to the collector. It reads the rows back with
+   the XQL API (`datamodel dataset in(<ds>)` when there is a Data Model Rule, the same form
+   Palo Alto's demisto-sdk uses) and compares them four ways, as for the other engines.
+4. **Cleanup:** XSIAM cannot delete single events. With `ROSETTALOG_XSIAM_DELETE_DATASET=1`
+   the runner deletes the whole dedicated dataset at the end; otherwise it deletes nothing.
+
+In GitHub Actions, the `xsiam` job of `real-engines.yml` runs only on manual dispatch (never on
+a schedule or a pull request, so never on forks), with the configuration taken from repository
+secrets.
+
 ## Real engines: four-way comparison (opt-in)
 
 The emulators are Rosettalog's own code, so they can be wrong. `--engine real` also runs the
@@ -180,6 +204,7 @@ uv run pytest -m real_engine --real-engine tests/real/test_rules_differential.py
 | splunk | `splunk` | `splunk/splunk:10.4.3` (REST oneshot input + search export) | linux/amd64 only (Apple Silicon: Rosetta) | ~4 GB RAM, ~1.5 GB image; ~80 s to provision, ~60–80 s per artifact under Rosetta (a restart is needed per artifact) |
 | sentinel | `sentinel` (default) | Kusto emulator `mcr.microsoft.com/azuredataexplorer/kustainer-linux:latest@sha256:a44a0015…` (REST `/v1/rest/query`, `/v1/rest/mgmt`) | **linux/amd64 only, x86-64 CPU with SSE4.2/AVX2; ARM is not supported** (Microsoft docs), so it does not run on Apple Silicon, even with Rosetta | ≥ 4 GB RAM (`-m 4G`), image "several GBs"; license: `ACCEPT_EULA=Y` (Microsoft Software License Terms, which forbid benchmarking) |
 | sentinel | `sentinel-adx` (opt-in) | Your Azure Data Explorer cluster | any | None locally; **sends the synthetic samples to your cluster** |
+| xsiam | `xsiam` (opt-in) | Your Cortex XSIAM tenant; rules installed by you | any | None locally; **sends the synthetic samples to your tenant**. Stub-tested only |
 
 **How the Splunk runner reads results.**
 
