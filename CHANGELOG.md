@@ -42,6 +42,9 @@ No release has been tagged yet.
   2000–2099; behaviour is unchanged until QRadar CE results exist. Confirmation case 10 gains a
   year-50 line that separates the three hypotheses. A real-engine test measures Splunk's `%y`
   pivot.
+- Assumptions can record `evidence_against` while unconfirmed. Reports, report JSON
+  (`status_label`) and generated docs show "unconfirmed, evidence against". A11 uses it: Joda's
+  default sliding window (1946–2045 in 2026) contradicts the assumed 2000–2099.
 - Generic mechanism: findings can depend on a registry assumption by topic
   (`Finding.depends_on`), and the pipeline resolves status and text from the assumption's
   current status.

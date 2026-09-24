@@ -8,10 +8,10 @@ An assumption leaves the report automatically once its ``status`` becomes ``conf
 from __future__ import annotations
 
 from importlib import resources
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from rosettalog.ir.findings import Finding
 
@@ -38,6 +38,26 @@ class Assumption(BaseModel):
     status: AssumptionStatus = "unconfirmed"
     evidence: str | None = None
     """For confirmed or refuted assumptions: what was observed, where and when."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_derived(cls, data: Any) -> Any:
+        """Accept serialized reports: ``status_label`` is derived, not an input."""
+        if isinstance(data, dict) and "status_label" in data:
+            data = {k: v for k, v in data.items() if k != "status_label"}
+        return data
+
+    evidence_against: str | None = None
+    """While unconfirmed: documented evidence that contradicts the current assumption. The
+    behaviour stays unchanged until the assumption is observed on the source SIEM."""
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def status_label(self) -> str:
+        """Status as shown in reports and docs, e.g. "unconfirmed, evidence against"."""
+        if self.status == "unconfirmed" and self.evidence_against:
+            return "unconfirmed, evidence against"
+        return self.status
 
 
 class AssumptionSet(BaseModel):
@@ -66,7 +86,12 @@ def resolve_dependencies(findings: list[Finding], aset: AssumptionSet | None) ->
         status = assumption.status if assumption else "unconfirmed"
         variant = {"unconfirmed": dep.unconfirmed, "confirmed": dep.confirmed,
                    "refuted": dep.refuted}[status]  # fmt: skip
-        suffix = f" [Assumption {assumption.id}: {status}]" if assumption else ""
+        suffix = ""
+        if assumption is not None:
+            suffix = f" [Assumption {assumption.id}: {assumption.status_label}"
+            if status == "unconfirmed" and assumption.evidence_against:
+                suffix += f" - {assumption.evidence_against}"
+            suffix += "]"
         out.append(
             finding.model_copy(
                 update={

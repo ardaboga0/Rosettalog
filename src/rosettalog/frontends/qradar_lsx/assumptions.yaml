@@ -8,6 +8,9 @@
 # Used at runtime: every migration report lists the `global` assumptions whose status is not
 # `confirmed` ("Unconfirmed global assumptions"). Tests keep docs, cases and this file in sync.
 #
+# evidence_against: while unconfirmed, documented evidence that contradicts the current
+# assumption. The status is then shown as "unconfirmed, evidence against" in reports and docs;
+# the behaviour stays unchanged until the assumption is observed on QRadar.
 # status: unconfirmed | confirmed | refuted. When a QRadar CE result is recorded, set the status
 # and `evidence` (e.g. "observed on QRadar CE 7.5.0, 2026-10-02: ..."). A refuted assumption stays
 # in reports until the frontend/emulator is corrected and the entry is updated.
@@ -108,17 +111,18 @@ assumptions:
     case: 10-devicetime-two-digit-year
     question: How does QRadar expand two-digit years (yy) in ext-data formats?
     assumption: >-
-      A fixed 2000-2099 window (69 becomes 2069, 50 becomes 2050). This is NOT Joda-Time's
-      documented default. Joda builds 'yy' with appendTwoDigitYear(<current year> - 30), a
-      sliding window from the current year - 80 to + 19 (1946-2045 in 2026: 69 becomes 1969, 50
-      becomes 1950); see DateTimeFormat.java and DateTimeFormatterBuilder.appendTwoDigitYear in
-      Joda-Time. Kept unchanged until observed on QRadar.
+      A fixed 2000-2099 window (69 becomes 2069, 50 becomes 2050). Kept unchanged until
+      observed on QRadar.
     alternatives: >-
       Joda's sliding window (69 -> 1969, 50 -> 1950) or the POSIX strptime pivot (69 -> 1969,
       50 -> 2050). Line 3 (year 50) tells all three apart.
     scope: per-artifact
     findings: [DATE_TWO_DIGIT_YEAR_PIVOT]
     topic: two-digit-year-pivot
+    evidence_against: >-
+      Joda-Time's default for 'yy' (used by QRadar ext-data formats) is a sliding window from
+      the current year -80 to +19, i.e. 1946-2045 in 2026 (69 -> 1969, 50 -> 1950); source:
+      Joda DateTimeFormat.java appendTwoDigitYear(<current year> - 30).
 
   - id: A12
     case: 11-regex-engine-constructs

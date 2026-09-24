@@ -150,11 +150,12 @@ def _assumptions(report: MigrationReport) -> list[str]:
         "|---|---|---|---|---|",
     ]
     for a in items:
-        status = (
-            "**REFUTED**: output known to differ, fix pending"
-            if a.status == "refuted"
-            else (a.status)
-        )
+        if a.status == "refuted":
+            status = "**REFUTED**: output known to differ, fix pending"
+        elif a.evidence_against:
+            status = f"**{a.status_label}**: {_cell(a.evidence_against)}"
+        else:
+            status = a.status
         lines.append(
             f"| {a.id} | {status} | {_cell(a.question)} | {_cell(a.assumption)} | `{a.case}` |"
         )
