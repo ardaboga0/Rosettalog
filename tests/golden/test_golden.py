@@ -18,7 +18,7 @@ CASES = {
 
 
 @pytest.mark.parametrize("case", sorted(CASES))
-@pytest.mark.parametrize("target", ["sentinel", "splunk", "elastic"])
+@pytest.mark.parametrize("target", ["sentinel", "splunk", "elastic", "xsiam"])
 def test_golden(case: str, target: str, update_golden: bool) -> None:
     source, options = CASES[case]
     result = get_backend(target).generate(parse_lsx(source), options.get(target, {}))

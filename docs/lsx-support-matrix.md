@@ -5,25 +5,25 @@ synthetic. See [findings-codes.md](findings-codes.md) for the meaning of each co
 
 ## Elements and attributes
 
-| LSX construct | Status | Sentinel (KQL) | Splunk | Elastic (ingest pipeline) | Notes |
-|---|---|---|---|---|---|
-| `<pattern id>` + regex text | ✅ | `extract()` (RE2) | transform `REGEX` (PCRE) | `grok` (Oniguruma/Joni) | See the regex table below. |
-| `case-insensitive="true"` | ✅ | `(?i)` prefix | `(?i)` prefix | `(?i)` inside the grok pattern | |
-| `trim-whitespace` | ⚠️ | as written | as written | as written | Semantics unclear (`LSX_TRIM_WHITESPACE`). |
-| `use-default-pattern` | ✅ | n/a | n/a | n/a | Java regex semantics are assumed either way. |
-| `<match-group order description>` | ✅ | | | | |
-| Several match groups | ⚠️ | `case()` on a selector column | `case(match(_raw,…))` in EVAL | `rl_mg` selector field + `if` conditions | The selection rule is an assumption (`LSX_MATCHGROUP_SELECTION_ASSUMED`). |
-| `device-type-id-override` | ⚠️ | ignored | ignored | ignored | Only affects QID resolution. |
-| `<matcher field pattern-id order capture-group>` | ✅ | | | | Order becomes fallback: `coalesce()` / `set override:false`. |
-| `capture-group` omitted (whole match) | ✅ | group 0 | wrapped in a group | the grok `…_m` capture | |
-| `enable-substitutions` (`\1:\2`) | ✅ | `strcat(extract…)` | multi-group `FORMAT` + EVAL concatenation | `set` with `{{{…}}}` template | |
-| `ext-data` on DeviceTime (Joda format) | ✅ / ⚠️ | `make_datetime()` | `TIME_PREFIX`/`TIME_FORMAT` | `date` processor (java.time) | Splunk: one timestamp per sourcetype. Elastic: text fields are case-sensitive (`ELASTIC_DATE_CASE_SENSITIVE`). |
-| DeviceTime without `ext-data` | ❌ | | | | `LSX_DEVICETIME_NO_FORMAT` |
-| `<event-match-single>` | ✅ | `case()` lookup | `case()` lookup | `set` + `if` per entry | EventCategory and EventSeverity keyed by EventName. |
-| `<event-match-multiple>` | ⚠️ | | | | Interpretation stated in `LSX_EVENT_MATCH_MULTIPLE_ASSUMED`. |
-| `send-identity` (sending variants) | ❌ | | | | No identity-event concept in the targets. |
-| `json-matcher`, `leef-matcher`, `cef-matcher`, `xml-matcher` | ❌ | | | | Planned. |
-| QID map (outside the LSX) | n/a | | | | Raw EventName and EventCategory are migrated; export the QID map separately. |
+| LSX construct | Status | Sentinel (KQL) | Splunk | Elastic (ingest pipeline) | XSIAM (Parsing Rules) | Notes |
+|---|---|---|---|---|---|---|
+| `<pattern id>` + regex text | ✅ | `extract()` (RE2) | transform `REGEX` (PCRE) | `grok` (Oniguruma/Joni) | `regexcapture()` (RE2), every group renamed `gN` | See the regex table below. |
+| `case-insensitive="true"` | ✅ | `(?i)` prefix | `(?i)` prefix | `(?i)` inside the grok pattern | one leading `(?i)` | |
+| `trim-whitespace` | ⚠️ | as written | as written | as written | as written | Semantics unclear (`LSX_TRIM_WHITESPACE`). |
+| `use-default-pattern` | ✅ | n/a | n/a | n/a | n/a | Java regex semantics are assumed either way. |
+| `<match-group order description>` | ✅ | | | | | |
+| Several match groups | ⚠️ | `case()` on a selector column | `case(match(_raw,…))` in EVAL | `rl_mg` selector field + `if` conditions | `_rl_mg` selector column + `if()`, inside **one** INGEST statement | The selection rule is an assumption (`LSX_MATCHGROUP_SELECTION_ASSUMED`). |
+| `device-type-id-override` | ⚠️ | ignored | ignored | ignored | ignored | Only affects QID resolution. |
+| `<matcher field pattern-id order capture-group>` | ✅ | | | | | Order becomes fallback: `coalesce()` / `set override:false`. |
+| `capture-group` omitted (whole match) | ✅ | group 0 | wrapped in a group | the grok `…_m` capture | the `m` group wrapping the pattern | |
+| `enable-substitutions` (`\1:\2`) | ✅ | `strcat(extract…)` | multi-group `FORMAT` + EVAL concatenation | `set` with `{{{…}}}` template | `concat()` of `regexcapture` groups | |
+| `ext-data` on DeviceTime (Joda format) | ✅ / ⚠️ | `make_datetime()` | `TIME_PREFIX`/`TIME_FORMAT` | `date` processor (java.time) | components captured and normalised, then `parse_timestamp("%Y-%m-%d %H:%M:%S")` into `_time` | Splunk: one timestamp per sourcetype. Elastic: text fields are case-sensitive (`ELASTIC_DATE_CASE_SENSITIVE`). |
+| DeviceTime without `ext-data` | ❌ | | | | | `LSX_DEVICETIME_NO_FORMAT` |
+| `<event-match-single>` | ✅ | `case()` lookup | `case()` lookup | `set` + `if` per entry | `if()` lookup with `config case_sensitive = true` | EventCategory and EventSeverity keyed by EventName. |
+| `<event-match-multiple>` | ⚠️ | | | | | Interpretation stated in `LSX_EVENT_MATCH_MULTIPLE_ASSUMED`. |
+| `send-identity` (sending variants) | ❌ | | | | | No identity-event concept in the targets. |
+| `json-matcher`, `leef-matcher`, `cef-matcher`, `xml-matcher` | ❌ | | | | | Planned. |
+| QID map (outside the LSX) | n/a | | | | | Raw EventName and EventCategory are migrated; export the QID map separately. |
 
 ## Assumed behaviours (awaiting QRadar CE confirmation)
 
@@ -64,9 +64,39 @@ The table is generated from `src/rosettalog/frontends/qradar_lsx/assumptions.yam
 source that the report uses too. To record a result, edit that file (`status`, `evidence`) and
 regenerate; a test fails if the docs are stale.
 
+## Cortex XSIAM (Parsing Rules): documented facts the backend relies on
+
+XSIAM output is **emulator-verified only**: there is no local XSIAM engine, and the emulator
+(`verify/emulators/xsiam.py`) encodes Rosettalog's reading of Palo Alto's documentation.
+
+- Parsing Rules use XQLp, a subset of XQL ([file structure and syntax](https://cortex-docs.paloaltonetworks.com/cortex-xsiam/configure-cortex-xsiam/data-management/parsing-rules/parsing-rules-file-structure-and-syntax.md)).
+  The rules of an INGEST group "get evaluated independently", so a log can be ingested more than
+  once ([INGEST](https://cortex-docs.paloaltonetworks.com/cortex-xsiam/configure-cortex-xsiam/data-management/parsing-rules/parsing-rules-file-structure-and-syntax/ingest.md)).
+  Rosettalog therefore writes **one** statement and selects the match group inside it.
+- XQL compares strings case-insensitively by default
+  ([config](https://cortex-docs.paloaltonetworks.com/xql-command-reference-guide/readme/stages/config.md)).
+  Rosettalog sets `config case_sensitive = true`.
+- XQL "utilizes the RE2 regular expression implementation"; `regexcapture()` captures named
+  groups ([regexcapture](https://cortex-docs.paloaltonetworks.com/xql-command-reference-guide/readme/functions/regexcapture.md)).
+  Regex support is therefore the **RE2 (KQL) column** below. In addition, flags inside a pattern
+  are reported (`XSIAM_REGEX_INLINE_FLAGS`), because the docs only describe a leading `(?i)`.
+- **Not documented; evidenced by Palo Alto's shipped Parsing Rules** ([demisto/content](https://github.com/demisto/content)):
+  - `regexcapture()` returns an empty object on no match. Shipped rules test
+    `to_string(x) = "{}"` (`XSIAM_REGEXCAPTURE_SEMANTICS`).
+  - In string literals, backslashes pass through unchanged and `\"` is a quote (563 uses). Text
+    whose spelling this doesn't cover is reported (`XSIAM_STRING_LITERAL`).
+  - The `parse_timestamp` format elements are not listed anywhere. Rosettalog uses only
+    `%Y-%m-%d %H:%M:%S` / `%E*S`, the most common elements in shipped rules, and does the month
+    names, 12-hour clock and two-digit years itself.
+- Two-digit years: the rule computes 2000 + yy, which is Rosettalog's A11 assumption
+  (`DATE_TWO_DIGIT_YEAR_PIVOT`). A missing year comes from the ingestion time
+  (`XSIAM_YEAR_FROM_INGEST_TIME`).
+- Extracted fields are written to the raw dataset in snake_case (`SourceIp` becomes
+  `source_ip`); `DeviceTime` becomes `_time`.
+
 ## Java regex constructs
 
-| Construct | RE2 (KQL) | PCRE (Splunk) | Oniguruma (Elastic grok) |
+| Construct | RE2 (KQL, XSIAM) | PCRE (Splunk) | Oniguruma (Elastic grok) |
 |---|---|---|---|
 | Groups, classes, lazy quantifiers | ✅ | ✅ | ✅ |
 | `\d \w \s` (ASCII in Java) | ✅ | ✅ | ✅ expanded to explicit ASCII classes |

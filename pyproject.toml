@@ -53,12 +53,14 @@ sentinel = "rosettalog.backends.sentinel:SentinelBackend"
 splunk = "rosettalog.backends.splunk:SplunkBackend"
 elastic = "rosettalog.backends.elastic:ElasticBackend"
 sigma = "rosettalog.backends.sigma:SigmaBackend"
+xsiam = "rosettalog.backends.xsiam:XsiamBackend"
 
 [project.entry-points."rosettalog.emulators"]
 sentinel = "rosettalog.verify.emulators.kql:KqlEmulator"
 splunk = "rosettalog.verify.emulators.splunk:SplunkEmulator"
 elastic = "rosettalog.verify.emulators.elastic:ElasticEmulator"
 sigma = "rosettalog.verify.emulators.sigma:SigmaEmulator"
+xsiam = "rosettalog.verify.emulators.xsiam:XsiamEmulator"
 
 [project.entry-points."rosettalog.runners"]
 elastic = "rosettalog.verify.real.elastic:ElasticRunner"

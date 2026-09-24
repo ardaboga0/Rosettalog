@@ -147,6 +147,23 @@ References between detection rules are resolved when the artifacts are loaded
 | `ELASTIC_TIMESTAMP_OVERWRITE` | FULL | A parsed DeviceTime replaces any existing `@timestamp`. |
 | `ELASTIC_STRING_TYPES` | FULL | Values are strings; the index mapping decides the final types. |
 
+## Cortex XSIAM backend (Parsing Rules)
+
+XSIAM output is emulator-verified only; see the XSIAM section of
+[lsx-support-matrix.md](lsx-support-matrix.md#cortex-xsiam-parsing-rules-documented-facts-the-backend-relies-on).
+
+| Code | Status | Meaning |
+|---|---|---|
+| `XSIAM_UNVERIFIED_TARGET` | PARTIAL | There is no local XSIAM engine. The parsing rule was checked with Rosettalog's emulator of the documented XQL behaviour, not on a tenant. |
+| `XSIAM_INGEST_TIME_DEPENDENCY` | PARTIAL | Parsing Rules run at ingestion: only logs ingested after deployment get the fields. |
+| `XSIAM_REGEXCAPTURE_SEMANTICS` | PARTIAL | The rule relies on `regexcapture()` returning an empty object when the pattern does not match. This is undocumented, but Palo Alto's shipped rules rely on it too. |
+| `XSIAM_REGEX_INLINE_FLAGS` | PARTIAL | The pattern sets flags inside the expression. RE2 supports them, but XQL's docs only describe a single leading `(?i)`. |
+| `XSIAM_STRING_LITERAL` | PARTIAL | Literal text has no documented XQL spelling: a line break, or a backslash before a quote or at the end. The candidate is left out. |
+| `XSIAM_YEAR_FROM_INGEST_TIME` | PARTIAL | The date has no year; the rule uses the ingestion time's year (`current_time()`). |
+| `XSIAM_CASE_SENSITIVE` | FULL | The rule sets `config case_sensitive = true`, because XQL compares strings case-insensitively by default. |
+| `XSIAM_NO_HIT_KEEP` | FULL | `no_hit=keep`: logs the rule does not parse are still stored, with only `_raw_log`. |
+| `XSIAM_STRING_TYPES` | FULL | Extracted values are strings (`_time` is a timestamp). |
+
 ## Sigma backend (detection rules)
 
 | Code | Status | Meaning |

@@ -43,7 +43,7 @@ jobs:
       - name: End-to-end example
         run: >
           uv run rosettalog convert examples/acme_firewall/acme_fw.lsx.xml
-          --to sentinel --to splunk --samples examples/acme_firewall/samples.yaml -o out
+          --to sentinel --to splunk --to xsiam --samples examples/acme_firewall/samples.yaml -o out
       - name: End-to-end rules example (Sigma + pySigma)
         run: >
           uv run rosettalog convert examples/rules/acme_rules.ir.json --to sigma

@@ -59,6 +59,20 @@ Empty strings and missing values are treated the same.
 - Joda literal matching is *assumed* to be exact, so syslog's space-padded day (`Mar  4`) does
   not match `MMM d`. This is unconfirmed; see confirmation case 09.
 
+### Targets without a local engine: Cortex XSIAM
+
+XSIAM has no container, local emulator or free tier. Its output is checked only by Rosettalog's
+own emulator (`verify/emulators/xsiam.py`), which is a **weaker tier** than the other targets:
+
+- The emulator encodes Rosettalog's reading of Palo Alto's documentation. It also encodes
+  behaviour that is only evidenced by Palo Alto's shipped Parsing Rules (for example,
+  `regexcapture` returning `{}` when nothing matches); each such case has a finding.
+- Nothing checks the emulator against the real engine, as the real-engine runners do for the
+  Splunk, Kusto and Elastic emulators. Every XSIAM report therefore carries
+  `XSIAM_UNVERIFIED_TARGET`.
+- The emulator uses real RE2, the engine XQL documents, so regex behaviour is not a guess.
+- Before deploying, check the rule with the Parsing Rules editor's **Simulate** on real logs.
+
 ## Real engines: four-way comparison (opt-in)
 
 The emulators are Rosettalog's own code, so they can be wrong. `--engine real` also runs the

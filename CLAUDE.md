@@ -34,6 +34,16 @@ core value is migrating *parsing logic* with honest findings and field-level ver
   (`SIGMA_TEST_DROPPED`). Never narrow a rule silently.
 - Rule fixtures are synthetic. Never use IBM-shipped rules, building blocks or content packs.
 
+- **Cortex XSIAM (M5):** XSIAM output is **emulator-verified only**; never describe it as
+  verified on XSIAM unless a tenant runner ran. Documented facts the backend relies on:
+  - XQL uses RE2;
+  - `config case_sensitive` defaults to false;
+  - the rules of an INGEST group run independently, so write one statement;
+  - XDM fields must exist in the schema, so never invent them.
+
+  Undocumented behaviour may only be relied on when Palo Alto's shipped content
+  (`demisto/content`) evidences it, and then with a finding.
+
 ## Non-negotiable rules
 
 1. **Honesty over coverage.** Every element is translated faithfully, or produces a `Finding`
