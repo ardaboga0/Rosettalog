@@ -1,6 +1,6 @@
 [project]
 name = "rosettalog"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "Migrate QRadar detection content (log source extensions, AQL) to other SIEMs with honest, verifiable translation reports."
 readme = "README.md"
 license = "Apache-2.0"

@@ -6,206 +6,146 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-No release has been tagged yet.
+## [0.1.0] - 2026-09-24
 
-### Open
-- **QRadar rule-export parser** (M3 follow-up, its own PR). It is blocked on QRadar CE answers to
-  Q1-Q5: the test-parameter encoding in the rule XML, test class names, how references are
-  stored, the boolean structure, and value semantics. Until then, rules are read from Rosettalog
-  IR (`*.ir.json`, see `docs/rules-ir-format.md`).
-
-### Added (IR format for hand-written rules)
-- `docs/rules-ir-format.md`: the `*.ir.json` format with tested examples, and
-  `rosettalog schema --ir` (JSON Schema for editor validation).
-
-### Added (M3c: building blocks and reference data)
-- Rule references are resolved when loading (`ir/references.py`), by rule id, uuid or name
-  (Q3 is open). Missing, ambiguous and cyclic references are reported (`RULE_REF_*`); a cycle
-  is reported on every member, and rules depending on a broken reference get `RULE_REF_NESTED`.
-- The Sigma backend inlines referenced building blocks into detections (`SIGMA_BB_INLINED`).
-  Correlations reference a building block's own Sigma rule by name where Sigma allows it
-  (`SIGMA_BB_REFERENCED`); the referenced rules travel as `BackendResult.context_files` for
-  pySigma conversion and the Sigma emulator.
-- `SIGMA_REFERENCE_DATA` names the reference set/map and suggests the target mechanism, with
-  nothing generated.
-- Assumption R09 (building blocks are evaluated per event) with confirmation case 09. The
-  `examples/rules-bb/` example includes a cycle and a missing reference.
-- Fixed (found by the rule verification): a correlation referencing a building block did not
-  include that rule's field names, so sample events were not renamed and the Sigma emulator
-  found no group.
-
-### Added (M3b: counters and sequences)
-- IR `Counter` (event count, or distinct values) and `Sequence` (ordered/unordered steps) as
-  `DetectionSpec.stateful`.
-- Sigma correlation output: base rules plus an `event_count` / `value_count` / `temporal` /
-  `temporal_ordered` correlation in one multi-document `.yml`. Findings are linked to the new
-  assumptions R04-R08 (`SIGMA_COUNTER_WINDOW`, `SIGMA_COUNTER_GROUPING`, `SIGMA_SEQUENCE_GAPS`,
-  `SIGMA_SEQUENCE_WINDOW`).
-- Shared window semantics (`verify/emulators/windows.py`) for the IR evaluator and the Sigma
-  emulator. Rule verification compares alerting groups for stateful rules.
-- The pySigma EQL target. `PYSIGMA_CORRELATION_FIXED_WINDOW` for Splunk/ES|QL correlations.
-  `PYSIGMA_BACKEND_GAP` is scoped to the backend (`pysigma[<name>]`), so a refused conversion no
-  longer makes the Sigma rule UNSUPPORTED.
-- Real engines run correlations: Splunk (a timed JSON sourcetype, fresh default index, unmodified
-  query), ES|QL and EQL (`@timestamp`, group keys from result columns / `join_keys`).
-- Confirmation cases 04-08 (timed; `send.sh` honours `# sleep N` and stamps the current syslog
-  time). The `examples/rules-stateful/` example.
-- Observed downstream gaps G3-G8 (fixed buckets; EQL value_count/temporal_ordered/temporal,
-  numeric `:`, `regex~`), pinned in tests and documented.
-
-### Added (M3a, in progress: rules → Sigma)
-- Detection IR (`Artifact(kind="detection")`, `DetectionSpec`, `And`/`Or`/`Not` over
-  `FieldTest`, `LogSourceTest`, `QidTest`, `RuleRef`, `ReferenceTest`, `Opaque`).
-- Sigma backend (`--to sigma`). The condition structure is kept, and tests Sigma cannot express
-  are dropped only where that broadens the rule (`SIGMA_TEST_DROPPED`). It adds a severity →
-  level convention, a `qradar:` custom attribute, responses reported, a user-supplied
-  `sigma.logsource_map` (never an invented logsource), and deterministic UUIDv5 ids.
-- `sigma` regex dialect: the Sigma `re` subset, with everything outside it reported.
-- `sigma` column in `field_map.yaml` (Sigma taxonomy firewall fields).
-- Optional pinned extras `sigma` / `sigma-backends` (pySigma 1.5.1; Splunk 2.1.0, Kusto 1.0.1,
-  Elasticsearch 2.1.1 backends). Rules are validated with all pySigma validators, and
-  `sigma.pysigma_targets` converts them. Refused conversions become `PYSIGMA_BACKEND_GAP`.
-- Rule verification with rule samples (parsed events plus expected hits). It compares the IR
-  evaluator, the Sigma emulator and pySigma queries on the real engines (Splunk `_json`, Kusto
-  `datatable`, a temporary Elasticsearch index), with the `VERIFY_RULE_*` findings.
-- `rosettalog-ir` frontend (`*.ir.json`), the `examples/rules/` synthetic example, the
-  `tests/real/test_rules_differential.py` differential suite, and CI jobs for `sigma check`
-  and for running without the extras.
-- Broadened rules say so in the generated `.yml` (`description` note, `qradar.broader_than_source`,
-  `qradar.dropped_tests`). Findings name the dropped test, and a dropped exclusion raises
-  `SIGMA_EXCLUSION_DROPPED`.
-- Case-sensitive tests are written without `cased`, which the pinned Splunk, Kusto, Lucene and ES|QL pySigma backends refuse
-  (`SIGMA_CASE_BROADENED`, linked to R01). Under NOT they are dropped instead, since dropping
-  `cased` there would narrow the rule.
-- Rule assumption registry (`frontends/qradar_rules/assumptions.yaml`, R01-R03 for Q5) with QRadar
-  CE confirmation cases in `examples/confirmation-rules/`. The `qradar-rules` frontend provides
-  the registry; its export parser is still pending.
-- `BackendResult.broadened` (generic), so the rule harness no longer checks a Sigma finding code.
-- `docs/rules-support-matrix.md`, including the observed pySigma gaps: G0 `|cased` refused by all
-  backends; G1/G2 Elasticsearch case-sensitivity and regex anchors, seen on Elasticsearch 9.5.4.
-
-### Added (M4a)
-- Elastic backend: Elasticsearch ingest pipeline (grok, set, date, remove) with ECS field names
-  (new `ecs` column in `field_map.yaml`).
-- `onig` regex dialect for Elastic grok (Oniguruma, Ruby syntax) with explicit ASCII classes,
-  lookaround-based `\b`, and rejection of non-fixed-width lookbehind
-  (`ONIG_LOOKBEHIND_NOT_FIXED`).
-- Joda → java.time date conversion for the `date` processor, with findings for case-sensitive
-  text fields and fixed-width numeric fields.
-- Elastic emulator (grok/set/date/remove, strict Painless-condition subset).
-- Opt-in real-engine verification: `rosettalog verify --engine real`, `RealEngineRunner` plugins,
-  the Elasticsearch 9.5.4 runner (`_simulate` API), a four-way comparison in the report, the
-  `@pytest.mark.real_engine` differential suite, and the weekly/manual
-  `real-engines.yml` workflow.
-- New findings: `VERIFY_REAL_MISMATCH`, `VERIFY_EMULATOR_DIVERGENCE`, `VERIFY_REAL_ENGINE_ERROR`,
-  `VERIFY_REAL_NOT_COMPARABLE`, `ELASTIC_*` and `ONIG_*`.
-
-### Changed / Fixed (after the first CI real-engine run, run 35937389853)
-- The Splunk emulator trims surrounding whitespace from extracted values, as real Splunk does
-  (confirmation case 06). New finding `SPLUNK_VALUE_TRIMMED`, linked to assumption A06: it only
-  matters if QRadar preserves the whitespace, and its status and text follow A06.
-- The Splunk emulator models the `MAX_DAYS_AGO`/`MAX_DAYS_HENCE` window (defaults 2000 / 2 days,
-  per props.conf 10.4). Real Splunk replaced `01/02/69` (→ 1969) with another event's time
-  (confirmation case 10). New finding `SPLUNK_TIME_WINDOW`. The real runner reports `_time` as
-  not comparable when the window verdict depends on today's date.
-- Two-digit years were checked against sources:
-  - Joda-Time `yy` is a sliding window (current year −80…+19), per DateTimeFormat.java.
-  - Python strptime and (assumed) Splunk `%y` use POSIX (69–99 → 19xx).
-  - Elasticsearch `uu` and our KQL use 2000–2099.
-
-  The new per-target finding `DATE_TWO_DIGIT_YEAR_PIVOT` is linked to assumption A11 and
-  replaces `DATE_TWO_DIGIT_YEAR`. A11 now records that Joda's default differs from the assumed
-  2000–2099; behaviour is unchanged until QRadar CE results exist. Confirmation case 10 gains a
-  year-50 line that separates the three hypotheses. A real-engine test measures Splunk's `%y`
-  pivot.
-- Splunk's `%y` pivot was measured on Splunk 10.4.3 (real-engines run 35976943392): 50 → 2050,
-  68 → 2068, 69 → 1969, i.e. the POSIX strptime pivot. The Splunk `DATE_TWO_DIGIT_YEAR_PIVOT`
-  text now states the measurement instead of an assumption.
-- Assumptions can record `evidence_against` while unconfirmed. Reports, report JSON
-  (`status_label`) and generated docs show "unconfirmed, evidence against". A11 uses it: Joda's
-  default sliding window (1946–2045 in 2026) contradicts the assumed 2000–2099.
-- Generic mechanism: findings can depend on a registry assumption by topic
-  (`Finding.depends_on`), and the pipeline resolves status and text from the assumption's
-  current status.
-
-### Added (M4c)
-- Real KQL runners. `sentinel` uses the Kusto emulator (kustainer-linux pinned by digest,
-  `ACCEPT_EULA=Y`), is x86-64 with AVX2 only, and refuses ARM hosts with the documented reason.
-  `sentinel-adx` is opt-in and uses your Azure Data Explorer cluster via
-  `ROSETTALOG_ADX_CLUSTER/_DATABASE/_TOKEN`. Both ingest samples into a random temporary table,
-  run the generated KQL unmodified behind `let <table> = <temp>;`, and always drop the table.
-- `--runner` option on `rosettalog verify`, and a Sentinel job in the real-engines workflow.
-- Not yet run against a real engine: the Kusto emulator cannot run on the development Mac
-  (Apple Silicon), and no ADX cluster was available. Both runners are covered by stubbed-HTTP
-  unit tests. The CI job is the first real run.
-
-### Added (M4b)
-- Real Splunk runner (`splunk/splunk:10.4.3`, amd64): installs the generated app with
-  system-wide export, restarts so index-time settings apply, ingests via oneshot and reads
-  fields via search export. `_time` counts only with `timestartpos`; splunkd's certificate is
-  pinned. It has a weekly/manual workflow job.
-- Findings `SPLUNK_KV_MODE_NONE` and `SPLUNK_APP_SCOPE` (notes).
-- The runner waits for the image healthcheck and restarts with the CLI. An early REST restart
-  aborted provisioning, and the REST self-restart left splunkd down under Rosetta.
-- The Docker helper no longer uses `--rm`, so an engine that exits stays inspectable until
-  cleanup; `Container.healthy()` fails fast when a container has stopped.
-
-### Fixed (M4b), found by real-Splunk differential testing
-- props.conf now sets `KV_MODE = none`. Splunk's default automatic key=value extraction added
-  fields QRadar never extracts (e.g. `user`), and the emulator did not model that. The emulator
-  now refuses auto KV.
-- Named groups are no longer emitted in Splunk `REGEX`. Splunk extracted them as fields and
-  skipped `FORMAT $N`, which nulled `EVAL-user` on the Acme sample. The emulator refuses named
-  groups.
-
-- Real Splunk timestamps: year-less formats are inferred from event order (an out-of-order
-  sample got 2027 and was rejected), and when `TIME_FORMAT` fails Splunk falls back to automatic
-  recognition. Both are now reported (`SPLUNK_YEAR_INFERENCE`, `SPLUNK_TIMESTAMP_FALLBACK`, both
-  PARTIAL). The runner marks such `_time` values as not comparable instead of reporting a false
-  emulator divergence.
-
-### Fixed (M4a)
-- The Elastic backend no longer sets `locale: ENGLISH` on date processors. Elasticsearch 9.5.4
-  rejects that literal although the docs name it as the default; this was found by the first
-  differential run and has a regression test.
-
-### Changed
-- Roadmap re-scoped. M2 is now an integration point plus an optional adapter for external AQL
-  translators (no AQL grammar). M3 is QRadar rules → Sigma only, with pySigma for targets.
-- Splunk props.conf now has separate, commented index-time and search-time sections.
-- Emulators run Java and PCRE patterns in ASCII mode, which matches both engines' defaults for
-  `\w \d \s \b` and `(?i)`.
-- `SPLUNK_INDEX_TIME_SETTINGS` (FULL note) is replaced by `SPLUNK_INDEX_TIME_DEPENDENCY`
-  (PARTIAL: `_time` depends on index-time settings that only affect newly indexed data).
-
-- The Globex test fixture is renamed to Tessivor (an invented vendor name; "Globex" is a real
-  trading platform).
-- The fixture IP policy now allows RFC 5737 and RFC 1918 addresses, plus `0.0.0.0` where it has
-  a documented meaning. A test enforces it.
-
-### Fixed
-- Splunk: with several match groups, a field extracted only by a later group was applied even
-  when an earlier group had been selected. Found by confirmation case 01.
+The first public release. It covers QRadar Log Source Extension (LSX) parsing migration to three
+SIEMs, and QRadar-style detection rules → Sigma, with target queries from pySigma. Every
+translation is FULL, PARTIAL or UNSUPPORTED, with findings, and can be verified on sample data,
+with local emulators or (opt-in) real engines.
 
 ### Added
-- `ground_truth_source` per sample, `--require-ground-truth`, and a ground-truth summary in the
-  report. Shipped samples must have complete expected values (enforced by tests).
-- `BackendResult.settings`: each generated setting is declared as index-time, search-time or
-  query-time, and the report lists them in separate sections.
-- New findings: `SPLUNK_INDEX_TIME_DEPENDENCY`, `SPLUNK_EVENT_BREAKING_ASSUMED`,
-  `VERIFY_UNKNOWN_EXPECTED_FIELD`.
-- `examples/confirmation/`: 15 minimal QRadar CE cases covering 16 assumed LSX behaviours.
-- Assumption registry (`frontends/qradar_lsx/assumptions.yaml`). Every report has a top-level
-  "Unconfirmed global assumptions" section (MD + JSON), and the doc tables are generated from
-  the same file.
-- Vendor-neutral IR for regex-based parsers, with findings (FULL / PARTIAL / UNSUPPORTED).
-- QRadar Log Source Extension (LSX) frontend: patterns, match groups, matchers (order,
-  capture groups, substitutions, Joda `ext-data` timestamps), event-match-single/multiple.
-- Java regex tokenizer and translators to RE2 (KQL) and PCRE (Splunk), reporting every difference.
-- Microsoft Sentinel backend: KQL parser function with ASIM field names.
-- Splunk backend: props.conf / transforms.conf with CIM field names and timestamp settings.
-- Verification harness with local emulators for QRadar semantics, KQL (on RE2) and Splunk .conf.
-- Markdown and JSON migration reports; `rosettalog schema` prints the JSON schema.
-- CLI: `convert`, `verify`, `inspect`, `plugins`, `schema`.
 
-[Unreleased]: https://github.com/ardaboga0/Rosettalog/commits/main
+**Parsing migration (LSX)**
+- QRadar LSX frontend: patterns, match groups, matchers (order fallback, capture groups,
+  substitutions, Joda-Time `ext-data`), event-match-single/multiple. Everything else becomes a
+  finding. It uses a hardened XML parser (no entities, no network, no DTD).
+- Backends:
+  - Microsoft Sentinel: a KQL parser function with ASIM names (`asim_schema` option).
+  - Splunk: props.conf / transforms.conf with CIM names. The index-time and search-time
+    sections are separate, and every setting has a declared scope.
+  - Elastic: an Elasticsearch ingest pipeline (grok, set, date, remove) with ECS names.
+- A Java regex tokenizer and translators to RE2 (KQL), PCRE (Splunk), Oniguruma (Elastic grok)
+  and Python (emulation). Every semantic difference is reported.
+- Joda-Time → strptime (Splunk), java.time (Elastic) and KQL `make_datetime` conversion, with
+  findings for year inference, two-digit years, time zones and case-sensitivity.
+- Canonical field taxonomy (`data/field_map.yaml`) mapped to ASIM, CIM, ECS and Sigma names.
+
+**Detection rules → Sigma**
+- Detection IR (`Artifact(kind="detection")`): boolean conditions over field, log source, QID,
+  rule-reference, reference-data and opaque tests; counters (`event_count` / `value_count`)
+  and sequences (`temporal` / `temporal_ordered`); building blocks and their references
+  (resolved by rule id, uuid or name, with cycle / missing / ambiguous detection).
+- `rosettalog-ir` frontend: rules are written as `*.ir.json`, documented for hand-written
+  rules in [docs/rules-ir-format.md](docs/rules-ir-format.md). `rosettalog schema --ir` prints
+  the JSON Schema.
+- Sigma backend (`--to sigma`):
+  - The source's boolean structure is kept. Tests Sigma cannot express are dropped **only where
+    that broadens the rule**, and the generated `.yml` says so in its `description` and
+    `qradar:` block.
+  - Building blocks are inlined, or referenced by name from correlations.
+  - Reference data is named, together with the target mechanism.
+  - The logsource comes only from a user-supplied `sigma.logsource_map` (never invented).
+  - Severity becomes the level (a documented convention), and ids are deterministic UUIDv5.
+- `sigma` regex dialect (the Sigma `re` subset).
+- Optional, pinned pySigma extras (`sigma`, `sigma-backends`: pySigma 1.5.1; Splunk 2.1.0,
+  Kusto 1.0.1, Elasticsearch 2.1.1 backends). Rules are validated with every pySigma validator,
+  and `-O sigma.pysigma_targets=splunk,kusto,lucene,esql,eql` converts them. Downstream
+  refusals and known semantic gaps are findings (`PYSIGMA_*`), never patched.
+
+**Verification**
+- Sample-based verification. Parsers are compared per field: QRadar (emulated) vs target
+  emulator vs expected. Rules are compared per event (single-event) or per alerting group
+  (counters, sequences): source IR evaluator vs Sigma emulator vs expected.
+- `ground_truth_source` per sample and `--require-ground-truth`. Shipped samples must be
+  complete (enforced by tests).
+- Opt-in real-engine verification (`--engine real`, `@pytest.mark.real_engine`, and the
+  weekly/manual `real-engines.yml` workflow). The engines run locally and are pinned:
+  - Elasticsearch 9.5.4, Splunk 10.4.3, and the Kusto emulator (x86-64 only).
+  - An opt-in Azure Data Explorer runner.
+
+  For rules, each pySigma query runs on the matching engine. Emulator-vs-engine divergences are
+  treated as emulator bugs, with regression tests.
+
+**Assumptions and reports**
+- Assumption registries for LSX (A01-A16) and rules (R01-R09). Each assumption has a QRadar CE
+  confirmation case: `examples/confirmation/` (15 LSX cases) and `examples/confirmation-rules/`
+  (9 rule cases, timed where needed). Doc tables are generated from the registries.
+- Findings can depend on an assumption (`depends_on`), so their status and text follow it.
+  Assumptions can record `evidence_against` ("unconfirmed, evidence against").
+- Markdown and JSON reports (`rosettalog schema`). Every report lists the unconfirmed global
+  assumptions of its source formats.
+- CLI: `convert`, `verify`, `inspect`, `plugins`, `schema`. Plugins (frontends, backends,
+  emulators, runners) are discovered through entry points.
+- Packaging: sdist and wheel via hatchling. The wheel ships the data files (`field_map.yaml`,
+  both assumption registries) and a `py.typed` marker. A CI `package` job installs the built
+  wheel into a clean venv and runs the examples from it.
+
+### Changed
+- Scope: parsing migration first; rules → Sigma only, with target queries from pySigma; AQL
+  (M2) as a future integration point for external translators, not an in-house translator.
+- Emulators run Java and PCRE patterns in ASCII mode, as both engines do by default for
+  `\w \d \s \b` and `(?i)`.
+- Case-sensitive rule tests are written without Sigma's `cased`, because the pinned Splunk,
+  Kusto, Lucene and ES|QL backends refuse it. This broadens them (`SIGMA_CASE_BROADENED`,
+  linked to R01). Under NOT such a test is dropped instead, since it would otherwise narrow the
+  rule.
+- `PYSIGMA_BACKEND_GAP` is scoped to the backend (`pysigma[<name>]`), so a refused conversion
+  does not make the Sigma rule UNSUPPORTED.
+
+### Fixed
+These were found during development by confirmation cases and by differential testing against
+real engines. Each has a regression test.
+- Splunk: with several match groups, a field extracted only by a later group was applied even
+  when an earlier group had been selected (confirmation case 01).
+- Splunk: props.conf sets `KV_MODE = none`, because automatic key=value extraction added fields
+  QRadar never extracts. Named groups are no longer emitted in `REGEX`, because Splunk skipped
+  `FORMAT $N`. The emulator now trims values and models `MAX_DAYS_AGO`/`MAX_DAYS_HENCE`, as
+  real Splunk does. Splunk's `%y` pivot was measured (POSIX: 69 → 1969).
+- Elastic: no `locale: ENGLISH` on date processors (rejected by Elasticsearch 9.5.4).
+- Rules: a correlation that references a building block now includes that block's field names
+  (the Sigma emulator found no group without them).
+
+### Known limitations
+- **The QRadar rule-export parser is pending.** It waits for QRadar CE answers to Q1-Q5: the
+  test-parameter encoding in the rule XML, test class names, how references are stored, the
+  boolean structure, and value semantics. See
+  [docs/rules-support-matrix.md](docs/rules-support-matrix.md). Until then, rules must be
+  written as `*.ir.json`.
+- **Unconfirmed assumptions.** QRadar's behaviour is assumed wherever IBM's documentation is
+  silent. Nothing has been observed on QRadar CE yet:
+  - **16 LSX assumptions** (A01-A16), 9 of them global.
+  - **9 rule assumptions** (R01-R09), 4 of them global.
+
+  Every report lists the unconfirmed global ones. Help is welcome: see the confirmation packs.
+- **A11 is "unconfirmed, evidence against".** Two-digit years (`yy`) are assumed to map to
+  2000-2099, but Joda-Time's default is a sliding window (1946-2045 in 2026). Behaviour is
+  unchanged until QRadar CE confirms it; the targets' own pivots are reported
+  (`DATE_TWO_DIGIT_YEAR_PIVOT`).
+- **pySigma downstream gaps** (pinned versions, observed on real engines; details and upstream
+  issue drafts in [docs/rules-support-matrix.md](docs/rules-support-matrix.md#known-downstream-gaps-observed)
+  and [docs/upstream/](docs/upstream/README.md)):
+  - G1: Elasticsearch Lucene / ES|QL match Sigma's case-insensitive values case-sensitively
+    (ES|QL: [pySigma-backend-elasticsearch#107](https://github.com/SigmaHQ/pySigma-backend-elasticsearch/issues/107)).
+  - G2: Elasticsearch regexes have no `^`/`$` anchors and always match the whole value
+    ([draft](docs/upstream/g2-regex-anchors.md)).
+  - G3: Splunk and ES|QL correlations use fixed time buckets. The Sigma spec tolerates this but
+    asks for a warning, which Rosettalog provides (ES|QL:
+    [#182](https://github.com/SigmaHQ/pySigma-backend-elasticsearch/issues/182); Splunk:
+    [draft](docs/upstream/g3-splunk-fixed-window.md)).
+  - G4: EQL `value_count` counts repeats of one value instead of distinct values
+    ([#218](https://github.com/SigmaHQ/pySigma-backend-elasticsearch/issues/218), fixed upstream
+    after 2.1.1).
+  - G5/G6: EQL `temporal_ordered` produces an invalid query, and `temporal` ignores the timespan
+    ([draft](docs/upstream/g5-g6-eql-temporal.md)).
+  - G7: EQL compares numbers with `:`, which Elasticsearch rejects
+    ([draft](docs/upstream/g7-eql-numeric-colon.md)).
+  - G8: EQL renders Sigma regexes with the case-insensitive `regex~`
+    ([draft](docs/upstream/g8-eql-regex-case.md)).
+  - Also: the Splunk, Kusto, Lucene and ES|QL backends refuse `cased` (G0); Kusto and Lucene
+    have no correlation support.
+- **Real-engine coverage:** the Kusto emulator runs only on x86-64 (CI). The ADX runner is
+  covered by stubbed tests only.
+- **Distribution:** the package is not on PyPI; install it from source.
+
+[Unreleased]: https://github.com/ardaboga0/Rosettalog/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/ardaboga0/Rosettalog/releases/tag/v0.1.0

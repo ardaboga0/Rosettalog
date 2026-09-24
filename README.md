@@ -7,24 +7,29 @@
 **Move your QRadar parsing logic to another SIEM, and know exactly what did not make it.**
 
 > [!IMPORTANT]
-> **Pre-release (0.1.0.dev0), not yet published to PyPI.** Rosettalog migrates QRadar **Log
-> Source Extensions** → **Microsoft Sentinel** (KQL parser functions, ASIM names), **Splunk**
-> (props.conf / transforms.conf, CIM names) and **Elastic** (ingest pipelines, ECS names), and
-> QRadar-style **detection rules** (single-event rules, counters, sequences, building blocks) →
-> **Sigma**, with target queries from pySigma.
+> **v0.1.0: the first public release (alpha; install from source, not on PyPI yet).**
+> Rosettalog migrates QRadar **Log Source Extensions** → **Microsoft Sentinel** (KQL parser
+> functions, ASIM names), **Splunk** (props.conf / transforms.conf, CIM names) and **Elastic**
+> (ingest pipelines, ECS names), and QRadar-style **detection rules** (single-event rules,
+> counters, sequences, building blocks) → **Sigma**, with target queries from pySigma.
 >
-> **The QRadar rule-export parser is pending.** It waits for QRadar CE confirmation of the rule
-> export format (open questions Q1-Q5 in the [rules support matrix](docs/rules-support-matrix.md)).
-> Until then, rules are described in the documented Rosettalog IR format (`*.ir.json`), which
-> you can write by hand: see [docs/rules-ir-format.md](docs/rules-ir-format.md). AQL queries are
-> not translated; for those it will integrate with existing converters (see the
-> [roadmap](#roadmap)).
+> - **The QRadar rule-export parser is pending.** It waits for QRadar CE confirmation of the
+>   rule export format (open questions Q1-Q5 in the
+>   [rules support matrix](docs/rules-support-matrix.md)). Until then, rules are written in the
+>   documented Rosettalog IR format (`*.ir.json`), by hand: see
+>   [docs/rules-ir-format.md](docs/rules-ir-format.md).
+> - **Some QRadar semantics are unconfirmed assumptions** (16 LSX, 9 rule). Every migration
+>   report lists the unconfirmed global ones, and each has a confirmation case you can run on
+>   QRadar CE ([see below](#help-confirm-qradars-behaviour)).
+> - AQL queries are not translated; for those Rosettalog will integrate with existing
+>   converters (see the [roadmap](#roadmap)). Known limitations are listed in the
+>   [changelog](CHANGELOG.md#known-limitations).
 >
-> **Some LSX semantics are unconfirmed assumptions.** IBM's documentation leaves some behaviour
-> open, for example how several match groups are selected, or whether an empty capture falls
-> back to the next matcher. Rosettalog's assumptions are listed in the
-> [support matrix](docs/lsx-support-matrix.md#assumed-behaviours-awaiting-qradar-ce-confirmation),
-> and **every migration report lists the unconfirmed global ones** in its own section.
+> The assumptions are listed in the
+> [LSX support matrix](docs/lsx-support-matrix.md#assumed-behaviours-awaiting-qradar-ce-confirmation)
+> (e.g. how several match groups are selected) and the
+> [rules support matrix](docs/rules-support-matrix.md#assumed-rule-behaviours-awaiting-qradar-ce-confirmation)
+> (e.g. whether counter windows slide).
 
 ### Help confirm QRadar's behaviour
 
@@ -35,6 +40,10 @@ lines:
 1. Upload `extension.xml` and attach it to a Universal DSM log source.
 2. Send `sample.log` with `examples/confirmation/send.sh`.
 3. Note what QRadar extracts.
+
+For **rules**, the [rule confirmation pack](examples/confirmation-rules/README.md) describes, per
+case, a rule to build in the QRadar UI, the lines to send, and what to record. Exporting those
+rules also settles open questions Q1-Q5, which unblocks the rule-export parser.
 
 Report your results in an issue using
 [`RESULTS-TEMPLATE.md`](examples/confirmation/RESULTS-TEMPLATE.md), with your QRadar version.
@@ -78,7 +87,7 @@ uv run rosettalog convert examples/acme_firewall/acme_fw.lsx.xml \
 ```
 acme_fw.lsx
   sentinel   PARTIAL     8 item(s) need review, samples 2/4
-  splunk     PARTIAL     2 item(s) need review, samples 4/4
+  splunk     PARTIAL     5 item(s) need review, samples 4/4
   elastic    PARTIAL     3 item(s) need review, samples 4/4
 ```
 
