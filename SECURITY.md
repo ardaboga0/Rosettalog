@@ -7,7 +7,7 @@
 Report it privately through GitHub's private vulnerability reporting instead:
 
 1. Open the repository's **Security** tab
-   (<https://github.com/ardaboga0/rosettalog/security>).
+   (<https://github.com/ardaboga0/Rosettalog/security>).
 2. Click **Report a vulnerability**.
 3. Describe the problem, the affected version or commit, and a minimal **synthetic**
    reproduction.

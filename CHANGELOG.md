@@ -104,4 +104,4 @@ No release has been tagged yet.
 - Markdown and JSON migration reports; `rosettalog schema` prints the JSON schema.
 - CLI: `convert`, `verify`, `inspect`, `plugins`, `schema`.
 
-[Unreleased]: https://github.com/ardaboga0/rosettalog/commits/main
+[Unreleased]: https://github.com/ardaboga0/Rosettalog/commits/main
