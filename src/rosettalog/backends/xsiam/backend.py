@@ -530,7 +530,8 @@ class XsiamBackend:
                 "rule was checked with Rosettalog's emulator of the documented XQL behaviour, not "
                 "on a tenant.",
                 suggestion="Paste the rule into the Parsing Rules editor and check it with "
-                "Simulate on real logs before deploying.",
+                "Simulate on real logs before deploying, or verify it on your tenant with "
+                "`rosettalog verify --engine real --runner xsiam` (see docs/verification.md).",
                 target=NAME,
             ),
             Finding(

@@ -6,9 +6,25 @@ on:
   workflow_dispatch:
     inputs:
       targets:
-        description: "Comma-separated targets (elastic, splunk, sentinel)"
+        description: "Comma-separated targets (elastic, splunk, sentinel; xsiam needs a tenant)"
         required: false
         default: "elastic,splunk,sentinel"
+      xsiam_lsx:
+        description: "xsiam only: LSX whose generated rules you installed on the tenant"
+        required: false
+        default: "examples/acme_firewall/acme_fw.lsx.xml"
+      xsiam_samples:
+        description: "xsiam only: samples file for that LSX"
+        required: false
+        default: "examples/acme_firewall/samples.yaml"
+      xsiam_vendor:
+        description: "xsiam only: vendor of the installed rule / collector"
+        required: false
+        default: "custom"
+      xsiam_product:
+        description: "xsiam only: product of the installed rule / collector"
+        required: false
+        default: "acme_fw_lsx"
   schedule:
     - cron: "17 3 * * 1" # weekly, Monday 03:17 UTC
 
@@ -56,3 +72,34 @@ jobs:
       # Kusto emulator pinned by digest in src/rosettalog/verify/real/kusto.py; the runner sets
       # ACCEPT_EULA=Y (Microsoft Software License Terms). The ADX runner is never used in CI.
       - run: uv run pytest -m real_engine --real-engine --real-targets sentinel -ra
+
+  xsiam:
+    # Opt-in and manual only: never scheduled, never on pull requests (so never on forks). It sends
+    # the synthetic samples to YOUR Cortex XSIAM tenant, configured with repository secrets, where
+    # you installed the generated Parsing/Data Model Rules yourself (no API exists for that).
+    if: github.event_name == 'workflow_dispatch' && contains(github.event.inputs.targets, 'xsiam')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ROSETTALOG_XSIAM_API_URL: ${{ secrets.ROSETTALOG_XSIAM_API_URL }}
+      ROSETTALOG_XSIAM_API_KEY: ${{ secrets.ROSETTALOG_XSIAM_API_KEY }}
+      ROSETTALOG_XSIAM_API_KEY_ID: ${{ secrets.ROSETTALOG_XSIAM_API_KEY_ID }}
+      ROSETTALOG_XSIAM_COLLECTOR_URL: ${{ secrets.ROSETTALOG_XSIAM_COLLECTOR_URL }}
+      ROSETTALOG_XSIAM_COLLECTOR_KEY: ${{ secrets.ROSETTALOG_XSIAM_COLLECTOR_KEY }}
+      ROSETTALOG_XSIAM_DATASET: ${{ secrets.ROSETTALOG_XSIAM_DATASET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+      - name: Verify against the tenant
+        env:
+          LSX: ${{ github.event.inputs.xsiam_lsx }}
+          SAMPLES: ${{ github.event.inputs.xsiam_samples }}
+          VENDOR: ${{ github.event.inputs.xsiam_vendor }}
+          PRODUCT: ${{ github.event.inputs.xsiam_product }}
+        run: >
+          uv run rosettalog verify "$LSX" -s "$SAMPLES" --to xsiam --engine real --runner xsiam
+          -O xsiam.vendor="$VENDOR" -O xsiam.product="$PRODUCT"
+          -O xsiam.target_dataset="$ROSETTALOG_XSIAM_DATASET"

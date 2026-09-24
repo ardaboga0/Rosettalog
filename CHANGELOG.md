@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (M5d: opt-in Cortex XSIAM tenant runner; stub-tested only)
+- `--runner xsiam` (`verify/real/xsiam.py`) compares a tenant's real output with the emulator.
+  - It uses only documented interfaces: the HTTP log collector (`/logs/v1/event`) and the XQL
+    API (`start_xql_query`, `get_query_results`, `delete_dataset`). It reads modeled values with
+    `datamodel dataset in(...)`, as Palo Alto's demisto-sdk does.
+  - Preconditions: you install the generated rules yourself (no API exists for that), in a
+    dedicated collector and dataset.
+  - It deletes the dataset only with `ROSETTALOG_XSIAM_DELETE_DATASET=1`; single events can't
+    be deleted.
+- An `xsiam` job in `real-engines.yml`: manual dispatch only, never scheduled and never on pull
+  requests (so never on forks), configured from repository secrets.
+- **Never run against a tenant**: no tenant was available, so the runner is covered by
+  stubbed-HTTP tests only.
+
 ### Added (M5c: XSIAM rules via Sigma: documented gap)
 - There is no pySigma XQL backend compatible with pySigma 1.x. pySigma-backend-cortexxdr 0.1.5
   requires `pysigma<1.0.0` (upstream issue #20, open) and has no correlation support.
