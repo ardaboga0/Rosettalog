@@ -44,7 +44,6 @@ def test_syslog_space_padded_day_does_not_match_single_space_format() -> None:
     ("fmt", "code", "status"),
     [
         ("MMM d HH:mm:ss", "DATE_NO_YEAR", Status.PARTIAL),
-        ("yy-MM-dd", "DATE_TWO_DIGIT_YEAR", Status.PARTIAL),
         ("yyyy-MM-dd zzz", "DATE_UNSUPPORTED_TOKEN", Status.UNSUPPORTED),
         ("yyyy-DDD", "DATE_UNSUPPORTED_TOKEN", Status.UNSUPPORTED),
         ("HH:mm:ss", "DATE_INCOMPLETE", Status.UNSUPPORTED),

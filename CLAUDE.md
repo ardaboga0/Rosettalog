@@ -35,6 +35,11 @@ core value is migrating *parsing logic* with honest findings and field-level ver
      top-level "Unconfirmed global assumptions" section (MD and JSON). Confirmed entries drop
      out automatically; refuted ones stay, marked, until the code is fixed.
 
+   A *target* difference whose relevance depends on an assumption (e.g. Splunk trims values;
+   this only matters if QRadar preserves whitespace, A06) is a finding with `depends_on`
+   (`AssumptionDependency`: a topic plus unconfirmed/confirmed/refuted variants). Backends
+   reference the assumption's `topic`, never a source-specific id, and the pipeline resolves it
+   against the registry.
    The doc tables in `docs/lsx-support-matrix.md` and `examples/confirmation/README.md` are
    generated from the YAML (`uv run python -m rosettalog.frontends.qradar_lsx.docs_sync`).
    Never edit them by hand; `tests/unit/test_assumptions.py` fails when they are stale.

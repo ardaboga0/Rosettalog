@@ -24,6 +24,28 @@ No release has been tagged yet.
 - New findings: `VERIFY_REAL_MISMATCH`, `VERIFY_EMULATOR_DIVERGENCE`, `VERIFY_REAL_ENGINE_ERROR`,
   `VERIFY_REAL_NOT_COMPARABLE`, `ELASTIC_*` and `ONIG_*`.
 
+### Changed / Fixed (after the first CI real-engine run, run 35937389853)
+- The Splunk emulator trims surrounding whitespace from extracted values, as real Splunk does
+  (confirmation case 06). New finding `SPLUNK_VALUE_TRIMMED`, linked to assumption A06: it only
+  matters if QRadar preserves the whitespace, and its status and text follow A06.
+- The Splunk emulator models the `MAX_DAYS_AGO`/`MAX_DAYS_HENCE` window (defaults 2000 / 2 days,
+  per props.conf 10.4). Real Splunk replaced `01/02/69` (→ 1969) with another event's time
+  (confirmation case 10). New finding `SPLUNK_TIME_WINDOW`. The real runner reports `_time` as
+  not comparable when the window verdict depends on today's date.
+- Two-digit years were checked against sources:
+  - Joda-Time `yy` is a sliding window (current year −80…+19), per DateTimeFormat.java.
+  - Python strptime and (assumed) Splunk `%y` use POSIX (69–99 → 19xx).
+  - Elasticsearch `uu` and our KQL use 2000–2099.
+
+  The new per-target finding `DATE_TWO_DIGIT_YEAR_PIVOT` is linked to assumption A11 and
+  replaces `DATE_TWO_DIGIT_YEAR`. A11 now records that Joda's default differs from the assumed
+  2000–2099; behaviour is unchanged until QRadar CE results exist. Confirmation case 10 gains a
+  year-50 line that separates the three hypotheses. A real-engine test measures Splunk's `%y`
+  pivot.
+- Generic mechanism: findings can depend on a registry assumption by topic
+  (`Finding.depends_on`), and the pipeline resolves status and text from the assumption's
+  current status.
+
 ### Added (M4c)
 - Real KQL runners. `sentinel` uses the Kusto emulator (kustainer-linux pinned by digest,
   `ACCEPT_EULA=Y`), is x86-64 with AVX2 only, and refuses ARM hosts with the documented reason.

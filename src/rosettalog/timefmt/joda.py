@@ -150,15 +150,9 @@ def compile_format(fmt: str) -> DateFormat:
             strp.append(tok.literal.replace("%", "%%"))
         elif L in ("y", "Y"):
             if n == 2:
+                # Century handling differs per engine; each backend reports it
+                # (DATE_TWO_DIGIT_YEAR_PIVOT, linked to the QRadar pivot assumption).
                 cap(r"\d{2}", Comp.YEAR2, "%y")
-                issues.append(
-                    DateIssue(
-                        Status.PARTIAL,
-                        "DATE_TWO_DIGIT_YEAR",
-                        "Two-digit year: century is assumed to be 2000-2099 in generated "
-                        "content; Joda uses a sliding pivot and Splunk's %y pivots at 1969.",
-                    )
-                )
             else:
                 cap(r"\d{4}", Comp.YEAR4, "%Y")
         elif L == "M":

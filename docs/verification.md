@@ -149,6 +149,20 @@ To reuse an engine you already run, set its URL (e.g. `ROSETTALOG_ELASTIC_URL`).
   data off your machine, and it runs only when you set these variables.
   **Status: tested only with a stubbed HTTP layer**; no real ADX cluster has been used yet.
 
+### Two-digit years across engines
+
+| Engine | `yy` / `%y` expansion | Source |
+|---|---|---|
+| QRadar (Joda-Time `ext-data`) | Rosettalog assumes 2000–2099 (A11, unconfirmed). Joda's documented default is a sliding window from the current year −80 to +19 | Joda `DateTimeFormat.java`, `DateTimeFormatterBuilder.appendTwoDigitYear` |
+| Splunk `%y` | 69–99 → 19xx, 00–68 → 20xx (standard strptime). Undocumented by Splunk; measured by `tests/real/test_splunk_year_pivot.py` | props.conf reference (TIME_FORMAT = strptime) |
+| Elasticsearch `uu` | 2000–2099 (base 2000) | JDK `DateTimeFormatter` |
+| KQL (generated) | 2000–2099 (`2000 + yy`, following A11) | Rosettalog |
+| Python `strptime` (reference) | 69–99 → 19xx, 00–68 → 20xx | python.org `time` docs |
+
+Each target reports its behaviour as `DATE_TWO_DIGIT_YEAR_PIVOT`, linked to A11. Splunk also
+rejects timestamps outside `MAX_DAYS_AGO` (default 2000 days) / `MAX_DAYS_HENCE` (default
+2 days) and uses the last acceptable event's time instead (`SPLUNK_TIME_WINDOW`).
+
 ### Running locally
 
 - **Linux:** Docker Engine; nothing else is needed.

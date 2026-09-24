@@ -14,7 +14,7 @@ from pathlib import Path
 from rosettalog import __version__
 from rosettalog.errors import InputError
 from rosettalog.ir import Artifact, Finding, Provenance, Status, aggregate_status
-from rosettalog.ir.assumptions import Assumption, AssumptionSet
+from rosettalog.ir.assumptions import Assumption, AssumptionSet, resolve_dependencies
 from rosettalog.plugins import (
     Backend,
     RealEngineSession,
@@ -38,15 +38,24 @@ def _unsupported_input(path: Path, message: str) -> Artifact:
     )
 
 
-def open_global_assumptions(source_formats: set[str]) -> list[Assumption]:
-    """Unconfirmed/refuted global assumptions of the frontends for ``source_formats``."""
-    out: list[Assumption] = []
+def assumption_set(source_format: str) -> AssumptionSet | None:
+    """The assumption registry of the frontend handling ``source_format``, if it has one."""
     for cls in frontends().values():
         provider = getattr(cls(), "assumptions", None)
         if provider is None:
             continue
         aset = provider()
-        if isinstance(aset, AssumptionSet) and aset.source_format in source_formats:
+        if isinstance(aset, AssumptionSet) and aset.source_format == source_format:
+            return aset
+    return None
+
+
+def open_global_assumptions(source_formats: set[str]) -> list[Assumption]:
+    """Unconfirmed/refuted global assumptions of the frontends for ``source_formats``."""
+    out: list[Assumption] = []
+    for fmt in sorted(source_formats):
+        aset = assumption_set(fmt)
+        if aset is not None:
             out.extend(aset.open_global())
     return out
 
@@ -190,7 +199,9 @@ def _run(
                 )
                 continue
             result = backend.generate(artifact, options.get(target, {}))
-            findings = list(result.findings)
+            findings = resolve_dependencies(
+                list(result.findings), assumption_set(artifact.source_format)
+            )
             verification = None
             if samples is not None and result.produced_output:
                 verification = verify(artifact, result, samples, sessions.get(target))

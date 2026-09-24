@@ -69,6 +69,7 @@ assumptions:
     assumption: No. Captured values keep surrounding whitespace.
     alternatives: The value is "carol"; QRadar may also trim every value regardless of the flag.
     scope: global
+    topic: value-whitespace
 
   - id: A07
     case: 07-empty-capture-fallback
@@ -105,11 +106,19 @@ assumptions:
 
   - id: A11
     case: 10-devicetime-two-digit-year
-    question: How are two-digit years (yy) expanded?
-    assumption: To 2000-2099 (69 becomes 2069).
-    alternatives: A sliding pivot (69 becomes 1969).
+    question: How does QRadar expand two-digit years (yy) in ext-data formats?
+    assumption: >-
+      A fixed 2000-2099 window (69 becomes 2069, 50 becomes 2050). This is NOT Joda-Time's
+      documented default. Joda builds 'yy' with appendTwoDigitYear(<current year> - 30), a
+      sliding window from the current year - 80 to + 19 (1946-2045 in 2026: 69 becomes 1969, 50
+      becomes 1950); see DateTimeFormat.java and DateTimeFormatterBuilder.appendTwoDigitYear in
+      Joda-Time. Kept unchanged until observed on QRadar.
+    alternatives: >-
+      Joda's sliding window (69 -> 1969, 50 -> 1950) or the POSIX strptime pivot (69 -> 1969,
+      50 -> 2050). Line 3 (year 50) tells all three apart.
     scope: per-artifact
-    findings: [DATE_TWO_DIGIT_YEAR]
+    findings: [DATE_TWO_DIGIT_YEAR_PIVOT]
+    topic: two-digit-year-pivot
 
   - id: A12
     case: 11-regex-engine-constructs

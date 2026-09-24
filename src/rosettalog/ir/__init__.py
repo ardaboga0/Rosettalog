@@ -1,6 +1,12 @@
 """Vendor-neutral intermediate representation."""
 
-from rosettalog.ir.findings import Finding, Status, aggregate_status
+from rosettalog.ir.findings import (
+    AssumptionDependency,
+    Finding,
+    Status,
+    Variant,
+    aggregate_status,
+)
 from rosettalog.ir.models import (
     Artifact,
     Capture,
@@ -21,6 +27,7 @@ from rosettalog.ir.models import (
 
 __all__ = [
     "Artifact",
+    "AssumptionDependency",
     "Capture",
     "Coalesce",
     "Expr",
@@ -36,6 +43,7 @@ __all__ = [
     "Provenance",
     "Status",
     "Template",
+    "Variant",
     "aggregate_status",
     "pattern_ids",
 ]

@@ -100,9 +100,14 @@ def test_splunk_report_eval_and_time() -> None:
 
 
 def test_splunk_two_digit_year_pivot() -> None:
+    """Splunk %y: standard strptime pivot (69-99 -> 19xx, 00-68 -> 20xx), before the window."""
     em = splunk("TIME_FORMAT = %y-%m-%d\n", "", {"t": "_time"})
-    assert em.extract("70-01-02", now=NOW) == {"_time": "1970-01-02T00:00:00.000Z"}
+    assert em.timestamp is not None
+    assert em.timestamp.parse("70-01-02", NOW).year == 1970
+    assert em.timestamp.parse("68-01-02", NOW).year == 2068
     assert em.extract("26-01-02", now=NOW) == {"_time": "2026-01-02T00:00:00.000Z"}
+    # 1970 is outside MAX_DAYS_AGO (2000 days): Splunk uses another event's time.
+    assert em.extract("70-01-02", now=NOW) == {"_time": None}
 
 
 def test_splunk_rejects_unknown_settings() -> None:

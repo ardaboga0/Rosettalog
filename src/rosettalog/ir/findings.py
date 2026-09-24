@@ -26,6 +26,29 @@ class Status(StrEnum):
 _RANK = {Status.FULL: 0, Status.PARTIAL: 1, Status.UNSUPPORTED: 2}
 
 
+class Variant(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    status: Status
+    message: str
+
+
+class AssumptionDependency(BaseModel):
+    """Makes a finding's status and text depend on a source-side assumption.
+
+    Backends refer to the assumption by *topic* (e.g. ``value-whitespace``), so they stay
+    independent of any source SIEM. The pipeline looks the topic up in the source frontend's
+    assumption registry and picks the variant for the assumption's current status.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    topic: str
+    unconfirmed: Variant
+    confirmed: Variant
+    refuted: Variant
+
+
 class Finding(BaseModel):
     """A statement about how one element of an artifact was (or was not) translated."""
 
@@ -42,6 +65,10 @@ class Finding(BaseModel):
     """Backend name the finding applies to, or ``None`` if it comes from the source side."""
     line: int | None = None
     """Line in the source file, when known."""
+    depends_on: AssumptionDependency | None = None
+    """If set, status and message follow the linked assumption (resolved by the pipeline)."""
+    assumption_id: str | None = None
+    """Registry id of the linked assumption once resolved (e.g. ``A06``)."""
 
 
 def aggregate_status(findings: Iterable[Finding], *, produced_output: bool) -> Status:

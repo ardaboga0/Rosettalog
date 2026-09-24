@@ -24,6 +24,7 @@ from rosettalog.backends.common import (
     date_format_findings,
     describe,
     slugify,
+    two_digit_year_finding,
 )
 from rosettalog.ir import (
     Artifact,
@@ -40,10 +41,11 @@ from rosettalog.ir import (
     Template,
 )
 from rosettalog.ir.fields import resolve_names
+from rosettalog.ir.findings import AssumptionDependency, Variant
 from rosettalog.plugins import BackendResult, DeploymentSetting, GeneratedFile
 from rosettalog.regex.tokenizer import GroupKind, Kind, RegexSyntaxError, tokenize
 from rosettalog.regex.translate import translate_tokens
-from rosettalog.timefmt.joda import compile_format
+from rosettalog.timefmt.joda import Comp, compile_format
 
 NAME = "splunk"
 TIME_FIELD = "_time"
@@ -280,6 +282,8 @@ class SplunkBackend:
                 target=NAME,
             )
         )
+        if r.transforms:
+            findings.append(self._trim_finding())
         findings.append(
             Finding(
                 status=Status.FULL,
@@ -406,6 +410,18 @@ class SplunkBackend:
             return []
         fmt = compile_format(first.format)
         findings.extend(date_format_findings(fmt, path=rule.path, target=NAME, line=rule.line))
+        if Comp.YEAR2 in fmt.components:
+            findings.append(
+                two_digit_year_finding(
+                    "Splunk's %y (not documented by Splunk; standard strptime, checked by the "
+                    "real-engine test)",
+                    "1969-2068 (69-99 -> 19xx, 00-68 -> 20xx)",
+                    fixed_2000=False,
+                    path=rule.path,
+                    target=NAME,
+                    line=rule.line,
+                )
+            )
         if not fmt.usable or fmt.strptime is None:
             return []
         settings: list[tuple[str, str]] = []
@@ -435,6 +451,20 @@ class SplunkBackend:
                 message="When TIME_FORMAT does not match an event, Splunk falls back to automatic "
                 "timestamp recognition or the previous event's time, where QRadar would leave "
                 "DeviceTime unset (observed with Splunk 10.4.3).",
+                target=NAME,
+                line=rule.line,
+            )
+        )
+        findings.append(
+            Finding(
+                status=Status.PARTIAL,
+                code="SPLUNK_TIME_WINDOW",
+                path=rule.path,
+                message="Splunk only accepts extracted timestamps up to MAX_DAYS_AGO (default "
+                "2000 days) in the past and MAX_DAYS_HENCE (default 2 days) in the future; "
+                "others get the timestamp of the last acceptable event. Historical or "
+                "future-dated QRadar events may therefore get a different _time.",
+                suggestion="Raise MAX_DAYS_AGO (up to 10951) when importing historical data.",
                 target=NAME,
                 line=rule.line,
             )
@@ -469,6 +499,39 @@ class SplunkBackend:
             )
         )
         return settings
+
+    @staticmethod
+    def _trim_finding() -> Finding:
+        """Splunk trims extracted values; whether that differs from QRadar depends on A06."""
+        base = (
+            "Splunk trims leading and trailing whitespace from values extracted by transforms "
+            "(observed with Splunk 10.4.3)."
+        )
+        dep = AssumptionDependency(
+            topic="value-whitespace",
+            unconfirmed=Variant(
+                status=Status.PARTIAL,
+                message=f"{base} This only matters if QRadar preserves such whitespace, which "
+                "Rosettalog assumes but has not confirmed.",
+            ),
+            confirmed=Variant(
+                status=Status.PARTIAL,
+                message=f"{base} QRadar preserves it, so values with surrounding whitespace "
+                "differ.",
+            ),
+            refuted=Variant(
+                status=Status.FULL,
+                message=f"{base} QRadar trims too, so the values agree.",
+            ),
+        )
+        return Finding(
+            status=dep.unconfirmed.status,
+            code="SPLUNK_VALUE_TRIMMED",
+            path="",
+            message=dep.unconfirmed.message,
+            target=NAME,
+            depends_on=dep,
+        )
 
     @staticmethod
     def _time_prefix(capture: Capture, patterns: PatternTable) -> str | None:
