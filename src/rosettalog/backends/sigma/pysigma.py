@@ -80,8 +80,24 @@ def target_label(name: str) -> str:
     return f"{t.package} {package_version(t.package) or '(not installed)'}"
 
 
+#: Targets with no usable pinned pySigma backend, and why (docs/rules-support-matrix.md).
+UNAVAILABLE_TARGETS = {
+    "xql": "Cortex XSIAM/XDR (XQL) has no pySigma backend compatible with pySigma 1.x: "
+    "pySigma-backend-cortexxdr 0.1.5 requires pysigma<1.0.0 "
+    "(https://github.com/7RedViolin/pySigma-backend-cortexxdr/issues/20) and has no correlation "
+    "support. Convert the Sigma rules for XSIAM by hand, or with that backend in a separate "
+    "environment.",
+}
+UNAVAILABLE_TARGETS["cortexxdr"] = UNAVAILABLE_TARGETS["xsiam"] = UNAVAILABLE_TARGETS["xql"]
+
+
 def parse_targets(spec: str) -> list[str]:
     names = [n.strip() for n in spec.split(",") if n.strip()]
+    for name in names:
+        if name in UNAVAILABLE_TARGETS:
+            raise InputError(
+                f"pySigma target '{name}' is not available: {UNAVAILABLE_TARGETS[name]}"
+            )
     unknown = [n for n in names if n not in TARGETS]
     if unknown:
         raise InputError(

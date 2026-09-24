@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (M5c: XSIAM rules via Sigma: documented gap)
+- There is no pySigma XQL backend compatible with pySigma 1.x. pySigma-backend-cortexxdr 0.1.5
+  requires `pysigma<1.0.0` (upstream issue #20, open) and has no correlation support.
+  `-O sigma.pysigma_targets=xql` (also `xsiam`, `cortexxdr`) fails with that explanation.
+  Documented in `docs/rules-support-matrix.md`; no in-house XQL rule renderer.
+
 ### Added (M5b: Cortex XSIAM Data Model Rules / XDM)
 - The `xsiam` backend also emits `<name>.model.xif`, mapping extracted fields to XDM for the
   schema-verified names in the new `xdm` column of `field_map.yaml` (with `to_integer` for ports
