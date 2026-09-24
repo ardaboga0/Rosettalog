@@ -6,74 +6,104 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-### Added (XSIAM confirmation pack)
+## [0.2.0] - 2026-09-24
 
-- `examples/confirmation/xsiam/`: one minimal parsing rule (`rule.xif`), `sample.log` and
-  `expected.yaml` per undocumented XSIAM behaviour the output relies on (X01-X05), with
-  instructions for the Parsing Rules editor's Simulate view and `send.sh` for an HTTP collector.
-- `src/rosettalog/backends/xsiam/unknowns.yaml`: the registry of these behaviours, with the same
-  status tracking as the QRadar assumptions (`unconfirmed`/`confirmed`/`refuted`, per-artifact
-  or global). The tables in the pack README and `docs/lsx-support-matrix.md` are generated from
-  it (`uv run python -m rosettalog.backends.xsiam.docs_sync`).
-- Backends can now provide their own assumption registry (`assumptions()`). Findings that depend
-  on a target behaviour follow its status, and reports with that target list its open global
-  entries (X02, X04) under "Unconfirmed global assumptions".
-- `XSIAM_XDM_INTEGER_NORMALIZATION` (PARTIAL): a port modeled with `to_integer()` loses its text
-  form (`"0443"` becomes 443) and a non-numeric port is assumed to become null (X05). This was
-  previously only visible as a verification difference.
+Cortex XSIAM as a parsing target (M5). The XSIAM output is **emulator-verified only**.
 
-### Changed (XSIAM confirmation pack)
+### Added
+- **`xsiam` backend: LSX → Cortex XSIAM Parsing Rules (`<name>.xif`)**, with the same
+  semantics as the other backends.
+  - One INGEST statement, because the rules in a group run independently; match groups are
+    selected inside it (A01).
+  - `config case_sensitive = true`, one `regexcapture()` per pattern, and
+    `coalesce`/`concat`/`if` for fallbacks, substitutions and event mappings.
+  - Timestamps are rebuilt from the captured components (month names, 12-hour clock, `yy`, UTC
+    offset) and parsed with `%Y-%m-%d %H:%M:%S`. A missing year comes from the ingestion time
+    (`XSIAM_YEAR_FROM_INGEST_TIME`).
+  - Options `xsiam.vendor`, `xsiam.product` and `xsiam.target_dataset`. Raw columns are the
+    snake_case canonical names.
+- **Data Model Rules (`<name>.model.xif`)** map the extracted fields to XDM, for the
+  schema-verified names in the new `xdm` column of `field_map.yaml`. Ports go through
+  `to_integer` and MAC addresses through `arraycreate`. Everything else stays in the raw dataset
+  with `FIELD_UNMAPPED`; no XDM names are invented, and a test locks the column to the verified
+  list.
+- **`xql` regex dialect** (`rosettalog.regex.xql`): RE2, every group renamed `gN` and wrapped in
+  `m`, one leading `(?i)`, and XQL string literals spelled as in Palo Alto's shipped content.
+- **XSIAM emulator.** It interprets the emitted `.xif` subset (Parsing Rule, then Data Model
+  Rule) with real RE2 and raises on anything else. It agrees with the Sentinel emulator on every
+  shipped sample set; the one remaining difference (literal backslashes) is reported.
+- **XSIAM findings:**
+  - `XSIAM_UNVERIFIED_TARGET` (emulator-verified only), `XSIAM_INGEST_TIME_DEPENDENCY` and
+    `XSIAM_STRING_LITERAL`.
+  - `XSIAM_REGEXCAPTURE_SEMANTICS` (X01), `XSIAM_REGEX_INLINE_FLAGS` (X03) and
+    `XSIAM_XDM_INTEGER_NORMALIZATION`, a PARTIAL finding. A port modeled as an XDM Number loses
+    its text form (`"0443"` becomes 443), and a non-numeric port is assumed to become null (X05).
+  - Informational: `XSIAM_XDM_MAPPED`, `XSIAM_CASE_SENSITIVE`, `XSIAM_NO_HIT_KEEP` and
+    `XSIAM_STRING_TYPES`.
+- **XSIAM confirmation pack** (`examples/confirmation/xsiam/`). It has one minimal `rule.xif`,
+  `sample.log` and `expected.yaml` for each undocumented XSIAM behaviour the output relies on
+  (X01-X05), plus instructions for the Parsing Rules editor's Simulate view and `send.sh` for an
+  HTTP log collector. The registry is `backends/xsiam/unknowns.yaml`, with the same status
+  tracking as the QRadar assumptions. The doc tables are generated from it
+  (`python -m rosettalog.backends.xsiam.docs_sync`).
+- **Target-side assumption registries.** A backend can provide its own registry
+  (`assumptions()`). Findings that depend on a target behaviour follow its status, and every
+  report with that target lists its open global entries (X02, X04) under "Unconfirmed global
+  assumptions".
+- **Opt-in XSIAM tenant runner** (`--runner xsiam`, `verify/real/xsiam.py`). It uses only
+  documented interfaces: the HTTP log collector and the XQL API, reading modeled values with
+  `datamodel dataset in(...)`.
+  - You install the generated rules yourself, since no API exists for that, in a dedicated
+    collector and dataset.
+  - The dataset is deleted only with `ROSETTALOG_XSIAM_DELETE_DATASET=1`.
+  - The `xsiam` job in `real-engines.yml` runs on manual dispatch only, configured from
+    repository secrets.
+- **XQL for rules: documented gap.** `-O sigma.pysigma_targets=xql` (also `xsiam` or
+  `cortexxdr`) fails with an explanation: no pySigma 1.x XQL backend exists. See the known
+  limitations.
 
-- `XSIAM_REGEXCAPTURE_SEMANTICS` and `XSIAM_REGEX_INLINE_FLAGS` are linked to X01 and X03.
-- The XSIAM emulator's `to_integer()` returns null for non-numeric text (X05).
+### Changed
+- `field_names` for XSIAM report the XDM name where a field is mapped, and the raw column
+  otherwise.
+- `resolve_dependencies` accepts several registries (source and target).
+- The report's "Unconfirmed global assumptions" section now also covers target behaviour (IDs
+  starting with X).
+- CI runs the end-to-end example and the installed-wheel check with `--to xsiam`.
 
-### Added (M5d: opt-in Cortex XSIAM tenant runner; stub-tested only)
-- `--runner xsiam` (`verify/real/xsiam.py`) compares a tenant's real output with the emulator.
-  - It uses only documented interfaces: the HTTP log collector (`/logs/v1/event`) and the XQL
-    API (`start_xql_query`, `get_query_results`, `delete_dataset`). It reads modeled values with
-    `datamodel dataset in(...)`, as Palo Alto's demisto-sdk does.
-  - Preconditions: you install the generated rules yourself (no API exists for that), in a
-    dedicated collector and dataset.
-  - It deletes the dataset only with `ROSETTALOG_XSIAM_DELETE_DATASET=1`; single events can't
-    be deleted.
-- An `xsiam` job in `real-engines.yml`: manual dispatch only, never scheduled and never on pull
-  requests (so never on forks), configured from repository secrets.
-- **Never run against a tenant**: no tenant was available, so the runner is covered by
-  stubbed-HTTP tests only.
+### Fixed
+Nothing that was in v0.1.0. The problems found while building M5 (the XSIAM emulator's null
+tests, and "(KQL)" labels in XSIAM regex findings) never shipped.
 
-### Added (M5c: XSIAM rules via Sigma: documented gap)
-- There is no pySigma XQL backend compatible with pySigma 1.x. pySigma-backend-cortexxdr 0.1.5
-  requires `pysigma<1.0.0` (upstream issue #20, open) and has no correlation support.
-  `-O sigma.pysigma_targets=xql` (also `xsiam`, `cortexxdr`) fails with that explanation.
-  Documented in `docs/rules-support-matrix.md`; no in-house XQL rule renderer.
+### Known limitations
+- **XSIAM output is emulator-verified only.** No local XSIAM engine exists. The output was
+  checked against Rosettalog's emulator of the documented XQL behaviour, and never on a tenant.
+  The tenant runner exists but has **never been run**: it is covered by stubbed-HTTP tests only.
+- **Five XSIAM behaviours are unconfirmed** (X01-X05, 2 of them global). They are undocumented,
+  so they are inferred from Palo Alto's shipped content. Each has a Simulate case in
+  `examples/confirmation/xsiam/`.
+- **No XSIAM (XQL) rule conversion.** pySigma-backend-cortexxdr 0.1.5 requires
+  `pysigma<1.0.0` (upstream
+  [issue #20](https://github.com/7RedViolin/pySigma-backend-cortexxdr/issues/20), open) and has
+  no correlation support. Rosettalog pins pySigma 1.5.1 and does not write its own XQL renderer.
+- **XDM coverage is partial.** Protocol and severity are `XDM_CONST` enums and stay unmapped, as
+  do NAT fields and any other field without a verified XDM name.
+- **The QRadar rule-export parser is pending.** It waits for QRadar CE answers to Q1-Q5: the
+  test-parameter encoding in the rule XML, test class names, how references are stored, the
+  boolean structure, and value semantics. See
+  [docs/rules-support-matrix.md](docs/rules-support-matrix.md). Until then, rules must be
+  written as `*.ir.json`.
+- **Unconfirmed QRadar assumptions.** Wherever IBM's documentation is silent, QRadar's behaviour
+  is assumed. Nothing has been observed on QRadar CE yet:
+  - 16 LSX assumptions (A01-A16), 9 of them global;
+  - 9 rule assumptions (R01-R09), 4 of them global.
 
-### Added (M5b: Cortex XSIAM Data Model Rules / XDM)
-- The `xsiam` backend also emits `<name>.model.xif`, mapping extracted fields to XDM for the
-  schema-verified names in the new `xdm` column of `field_map.yaml` (with `to_integer` for ports
-  and `arraycreate` for MAC addresses). Everything else stays in the raw dataset with
-  `FIELD_UNMAPPED`; no XDM names are invented. A test locks the column to the verified list.
-- The XSIAM emulator applies the Data Model Rule after the Parsing Rule, so verification compares
-  the XDM values. New finding `XSIAM_XDM_MAPPED`.
-
-### Added (M5a: Cortex XSIAM Parsing Rules; emulator-verified only)
-- `xsiam` backend: LSX → XSIAM Parsing Rules (`.xif`), with the same semantics as the other
-  backends.
-  - One INGEST statement: the group's rules run independently, so match groups are selected
-    inside it (A01).
-  - `config case_sensitive = true`; `regexcapture()` per pattern; `coalesce`/`concat`/`if` for
-    fallback, substitutions and event mappings.
-  - Timestamps are rebuilt from captured components (month names, 12-hour clock, `yy`, UTC
-    offset) and parsed with `%Y-%m-%d %H:%M:%S`. A missing year comes from the ingestion time.
-  - Options `xsiam.vendor`, `xsiam.product` and `xsiam.target_dataset`.
-- `xql` regex dialect (`rosettalog.regex.xql`): RE2, every group renamed `gN` and wrapped in
-  `m`, one leading `(?i)`, and XQL string literals as used in Palo Alto's shipped content.
-- XSIAM emulator: interprets the emitted `.xif` subset with real RE2 and raises on anything else.
-  It agrees with the Sentinel (RE2) results on every shipped sample set; the one difference
-  (case 14, a literal backslash with no documented XQL spelling) is reported.
-- Findings: `XSIAM_UNVERIFIED_TARGET`, `XSIAM_INGEST_TIME_DEPENDENCY`,
-  `XSIAM_REGEXCAPTURE_SEMANTICS`, `XSIAM_REGEX_INLINE_FLAGS`, `XSIAM_STRING_LITERAL`,
-  `XSIAM_YEAR_FROM_INGEST_TIME`, `XSIAM_CASE_SENSITIVE`, `XSIAM_NO_HIT_KEEP`,
-  `XSIAM_STRING_TYPES`.
+  A11 (two-digit years) is "unconfirmed, evidence against".
+- **pySigma downstream gaps G0-G8** are unchanged since v0.1.0; see
+  [0.1.0](#010---2026-09-24) and
+  [docs/rules-support-matrix.md](docs/rules-support-matrix.md#known-downstream-gaps-observed).
+- **Real-engine coverage:** the Kusto emulator runs only on x86-64 (CI). The ADX and XSIAM
+  runners are covered by stubbed tests only.
+- **Distribution:** the package is not on PyPI; install it from source.
 
 ## [0.1.0] - 2026-09-24
 
@@ -216,5 +246,6 @@ real engines. Each has a regression test.
   covered by stubbed tests only.
 - **Distribution:** the package is not on PyPI; install it from source.
 
-[Unreleased]: https://github.com/ardaboga0/Rosettalog/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ardaboga0/Rosettalog/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ardaboga0/Rosettalog/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ardaboga0/Rosettalog/releases/tag/v0.1.0
