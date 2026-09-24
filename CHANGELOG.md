@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (M5a: Cortex XSIAM Parsing Rules; emulator-verified only)
+- `xsiam` backend: LSX → XSIAM Parsing Rules (`.xif`), with the same semantics as the other
+  backends.
+  - One INGEST statement: the group's rules run independently, so match groups are selected
+    inside it (A01).
+  - `config case_sensitive = true`; `regexcapture()` per pattern; `coalesce`/`concat`/`if` for
+    fallback, substitutions and event mappings.
+  - Timestamps are rebuilt from captured components (month names, 12-hour clock, `yy`, UTC
+    offset) and parsed with `%Y-%m-%d %H:%M:%S`. A missing year comes from the ingestion time.
+  - Options `xsiam.vendor`, `xsiam.product` and `xsiam.target_dataset`.
+- `xql` regex dialect (`rosettalog.regex.xql`): RE2, every group renamed `gN` and wrapped in
+  `m`, one leading `(?i)`, and XQL string literals as used in Palo Alto's shipped content.
+- XSIAM emulator: interprets the emitted `.xif` subset with real RE2 and raises on anything else.
+  It agrees with the Sentinel (RE2) results on every shipped sample set; the one difference
+  (case 14, a literal backslash with no documented XQL spelling) is reported.
+- Findings: `XSIAM_UNVERIFIED_TARGET`, `XSIAM_INGEST_TIME_DEPENDENCY`,
+  `XSIAM_REGEXCAPTURE_SEMANTICS`, `XSIAM_REGEX_INLINE_FLAGS`, `XSIAM_STRING_LITERAL`,
+  `XSIAM_YEAR_FROM_INGEST_TIME`, `XSIAM_CASE_SENSITIVE`, `XSIAM_NO_HIT_KEEP`,
+  `XSIAM_STRING_TYPES`.
+
 ## [0.1.0] - 2026-09-24
 
 The first public release. It covers QRadar Log Source Extension (LSX) parsing migration to three

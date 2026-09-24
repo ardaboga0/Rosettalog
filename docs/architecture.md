@@ -61,6 +61,7 @@ Rosettalog does **not** re-implement them:
 | `rosettalog.backends.sentinel` | IR to a KQL parser function with ASIM field names. |
 | `rosettalog.backends.splunk` | IR to props.conf and transforms.conf with CIM field names. |
 | `rosettalog.backends.elastic` | IR to an Elasticsearch ingest pipeline (grok, set, date, remove) with ECS field names. |
+| `rosettalog.backends.xsiam` | IR to a Cortex XSIAM Parsing Rule (`.xif`): **one** INGEST statement, `regexcapture()` per pattern (the `xql` regex dialect in `rosettalog.regex.xql`, RE2), and timestamps rebuilt from captured components. Emulator-verified only. |
 | `rosettalog.regex.grok`, `rosettalog.regex.onig_emulation` | Grok patterns (every group renamed as a named capture) and their Python emulation. |
 | `rosettalog.timefmt.javatime` | Joda → java.time patterns for the Elasticsearch `date` processor, and a STRICT, case-sensitive parser for emulation. |
 | `rosettalog.verify.real` | Opt-in real-engine runners (entry-point group `rosettalog.runners`) and a small Docker CLI wrapper. |

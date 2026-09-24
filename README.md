@@ -13,6 +13,9 @@
 > (ingest pipelines, ECS names), and QRadar-style **detection rules** (single-event rules,
 > counters, sequences, building blocks) → **Sigma**, with target queries from pySigma.
 >
+> - **In development (M5):** Cortex XSIAM Parsing Rules (`--to xsiam`). They are
+>   **emulator-verified only**: no local XSIAM engine exists, so they are checked against
+>   Rosettalog's emulator of the documented XQL behaviour, not against a tenant.
 > - **The QRadar rule-export parser is pending.** It waits for QRadar CE confirmation of the
 >   rule export format (open questions Q1-Q5 in the
 >   [rules support matrix](docs/rules-support-matrix.md)). Until then, rules are written in the
@@ -133,8 +136,8 @@ QRadar LSX ─► frontend ─► IR + findings ─► backend ─► target con
 - **Findings.** Every approximation or gap is a finding with a stable code, for example
   `RE2_NO_LOOKAROUND` or `LSX_MATCHGROUP_SELECTION_ASSUMED`. See
   [docs/findings-codes.md](docs/findings-codes.md).
-- **Regex dialects.** Java regexes are tokenized and re-emitted for RE2, PCRE or Oniguruma
-  (Elastic grok). Every construct
+- **Regex dialects.** Java regexes are tokenized and re-emitted for RE2 (KQL, and XQL for XSIAM),
+  PCRE or Oniguruma (Elastic grok). Every construct
   that differs between them is reported. See the
   [support matrix](docs/lsx-support-matrix.md).
 - **Verification.** Emulators run the *generated* KQL (on real RE2) and the *generated* .conf
@@ -170,7 +173,7 @@ QRadar LSX ─► frontend ─► IR + findings ─► backend ─► target con
 | M2 | AQL: a documented integration point plus an optional adapter that hands queries to an external translator (e.g. Uncoder) and records its output and gaps as findings. No AQL grammar of our own. |
 | M3 ✅ (parser open) | QRadar custom rules and building blocks → IR detection model → **Sigma** only; target conversion is delegated to pySigma. Done: single-event rules, counters and sequences (Sigma correlations), building blocks and reference data, on IR input. **Open:** the QRadar rule-export parser, as its own PR once Q1-Q5 are confirmed on QRadar CE |
 | M4 | Elastic ingest pipelines; opt-in verification against real engines: Elasticsearch, Splunk, Kusto emulator (x86-64 only) and an opt-in ADX runner |
-| M5 | Cortex XSIAM (XQL parsing rules) |
+| M5 (in progress) | Cortex XSIAM: Parsing Rules (M5a, emulator-verified only), Data Model Rules / XDM (M5b), rules via Sigma (M5c: no pySigma 1.x XQL backend exists; documented gap), opt-in tenant runner (M5d, stub-tested) |
 
 ## Contributing
 
