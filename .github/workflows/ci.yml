@@ -82,9 +82,11 @@ jobs:
           cd "$work"
           venv/bin/rosettalog --help
           venv/bin/rosettalog convert examples/acme_firewall/acme_fw.lsx.xml \
-            --to sentinel --to splunk --to elastic --sourcetype acme:firewall \
+            --to sentinel --to splunk --to elastic --to xsiam --sourcetype acme:firewall \
             --samples examples/acme_firewall/samples.yaml --require-ground-truth -o out
           grep -q "Unconfirmed global assumptions" out/report.md
+          grep -q "^| X02 " out/report.md
+          ls out/*/xsiam/*.model.xif
           venv/bin/rosettalog convert examples/rules-stateful/stateful_rules.ir.json --to sigma \
             -O sigma.pysigma_targets=splunk,esql --samples examples/rules-stateful/samples.yaml -o out-rules
           grep -q "^| R0" out-rules/report.md
