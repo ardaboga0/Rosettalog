@@ -62,6 +62,33 @@ jobs:
       - name: sigma check (sigma-cli) over the generated rules
         run: uv run sigma check --fail-on-error --fail-on-issues out-rules/sigma out-rules-stateful/sigma out-rules-bb/sigma
 
+  package:
+    # Build sdist + wheel, install the wheel into a clean venv (outside the source tree) and run
+    # the examples from the installed package: data files (field_map.yaml, assumptions) must ship.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv build
+      - name: Install the wheel in a clean venv and run the examples
+        run: |
+          set -eu
+          work=$(mktemp -d)
+          cp -R examples "$work/"
+          uv venv --python 3.12 "$work/venv"
+          uv pip install --python "$work/venv/bin/python" "$(ls dist/*.whl)[sigma-backends]"
+          cd "$work"
+          venv/bin/rosettalog --help
+          venv/bin/rosettalog convert examples/acme_firewall/acme_fw.lsx.xml \
+            --to sentinel --to splunk --to elastic --sourcetype acme:firewall \
+            --samples examples/acme_firewall/samples.yaml --require-ground-truth -o out
+          grep -q "Unconfirmed global assumptions" out/report.md
+          venv/bin/rosettalog convert examples/rules-stateful/stateful_rules.ir.json --to sigma \
+            -O sigma.pysigma_targets=splunk,esql --samples examples/rules-stateful/samples.yaml -o out-rules
+          grep -q "^| R0" out-rules/report.md
+
   test-without-extras:
     # pySigma is optional: everything else must work, and Sigma output is flagged as not validated.
     runs-on: ubuntu-latest
