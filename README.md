@@ -1,6 +1,6 @@
 # Rosettalog
 
-[![CI](https://github.com/ardaboga0/rosettalog/actions/workflows/ci.yml/badge.svg)](https://github.com/ardaboga0/rosettalog/actions/workflows/ci.yml)
+[![CI](https://github.com/ardaboga0/Rosettalog/actions/workflows/ci.yml/badge.svg)](https://github.com/ardaboga0/Rosettalog/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
 
@@ -60,7 +60,7 @@ Sigma so that pySigma converts them to target queries.
 Requires Python 3.11+.
 
 ```bash
-git clone https://github.com/ardaboga0/rosettalog.git && cd rosettalog
+git clone https://github.com/ardaboga0/Rosettalog.git && cd Rosettalog
 uv sync                      # or: pip install -e .
 
 # Translate the bundled synthetic example to all targets, verifying against sample logs

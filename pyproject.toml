@@ -52,10 +52,10 @@ sentinel = "rosettalog.verify.real.kusto:KustainerRunner"
 sentinel-adx = "rosettalog.verify.real.kusto:AdxRunner"
 
 [project.urls]
-Homepage = "https://github.com/ardaboga0/rosettalog"
-Repository = "https://github.com/ardaboga0/rosettalog"
-Issues = "https://github.com/ardaboga0/rosettalog/issues"
-Changelog = "https://github.com/ardaboga0/rosettalog/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/ardaboga0/Rosettalog"
+Repository = "https://github.com/ardaboga0/Rosettalog"
+Issues = "https://github.com/ardaboga0/Rosettalog/issues"
+Changelog = "https://github.com/ardaboga0/Rosettalog/blob/main/CHANGELOG.md"
 
 [dependency-groups]
 dev = [
