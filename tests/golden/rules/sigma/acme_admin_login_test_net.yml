@@ -1,0 +1,27 @@
+title: 'Acme FW: admin login from documentation network'
+id: 93acb896-aa6a-5254-b3cf-f6750fc120e8
+name: acme_admin_login_test_net
+status: experimental
+description: Synthetic example rule for an invented vendor (Acme Firewall).
+logsource:
+  product: qradar
+detection:
+  sel_1:
+    LogSourceType: Acme Firewall
+  sel_2:
+    src_ip:
+    - 192.0.2.10
+    - 192.0.2.11
+  sel_3:
+    username|contains: adm
+  condition: sel_1 and sel_2 and sel_3
+level: medium
+qradar:
+  rule_id: '100101'
+  uuid: 5d0c9e3a-8b1f-4c62-9d7e-1a2b3c4d5e01
+  enabled: true
+  building_block: false
+  rule_type: event
+  severity: 6
+  credibility: 5
+  relevance: 7

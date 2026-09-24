@@ -26,7 +26,7 @@ from datetime import UTC, datetime
 from typing import Any, ClassVar
 
 from rosettalog.backends.sentinel.backend import kql_string
-from rosettalog.plugins import BackendResult, RealValue
+from rosettalog.plugins import EVENT_ID_FIELD, BackendResult, RealValue, TargetQuery
 from rosettalog.timefmt.joda import format_timestamp
 from rosettalog.verify.real.docker import (
     RealEngineError,
@@ -116,6 +116,38 @@ class KustoSession:
                 }
             )
         return out
+
+    def run_detection(
+        self, query: TargetQuery, content: str, events: Sequence[Mapping[str, str | int]]
+    ) -> set[str]:
+        if query.language != "kusto":
+            raise RealEngineError(f"Kusto cannot run {query.language} queries")
+        response = self._call("query", detection_query(content, events))
+        return {str(row[0]) for row in response["Tables"][0]["Rows"]}
+
+
+def detection_query(content: str, events: Sequence[Mapping[str, str | int]]) -> str:
+    """The generated ``where`` expression over a ``datatable`` of the events.
+
+    pySigma's Kusto backend without a pipeline emits only the filter expression. The events
+    become a ``datatable`` (string columns, ``long`` for numeric fields; a field an event does not
+    have is an empty string or null, as in a Log Analytics table) that is piped into
+    ``where <expression>`` unchanged.
+    """
+    columns = sorted({k for e in events for k in e})
+    numeric = {c for c in columns if any(isinstance(e.get(c), int) for e in events)}
+    schema = ", ".join(f"['{c}']:{'long' if c in numeric else 'string'}" for c in columns)
+
+    def cell(event: Mapping[str, str | int], column: str) -> str:
+        value = event.get(column)
+        if column in numeric:
+            return "long(null)" if value is None else str(value)
+        return kql_string(str(value) if value is not None else "")
+
+    rows = ", ".join(cell(e, c) for e in events for c in columns)
+    return (
+        f"datatable({schema}) [{rows}]\n| where {content.strip()}\n| project ['{EVENT_ID_FIELD}']"
+    )
 
 
 class KustainerRunner:

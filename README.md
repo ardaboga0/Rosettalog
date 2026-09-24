@@ -10,8 +10,10 @@
 > **Pre-release (0.1.0.dev0), not yet published to PyPI.** Rosettalog currently migrates
 > **parsing logic only**: QRadar **Log Source Extensions** → **Microsoft Sentinel** (KQL parser
 > functions, ASIM names), **Splunk** (props.conf / transforms.conf, CIM names) and **Elastic**
-> (ingest pipelines, ECS names). It does not
-> translate rules or AQL queries; for those it will integrate with existing converters (see the
+> (ingest pipelines, ECS names). Rule migration to **Sigma** (target queries via pySigma) is in
+> progress: the Sigma side works on Rosettalog IR, and the QRadar rule-export parser is pending
+> (see the [rules support matrix](docs/rules-support-matrix.md)). AQL queries are not
+> translated; for those it will integrate with existing converters (see the
 > [roadmap](#roadmap)).
 >
 > **Some LSX semantics are unconfirmed assumptions.** IBM's documentation leaves some behaviour
@@ -137,6 +139,11 @@ QRadar LSX ─► frontend ─► IR + findings ─► backend ─► target con
   sample logs for each one, ready to load into QRadar CE.
 - **Deployment scope.** Splunk index-time settings (they affect only newly indexed data) are
   separated from search-time extractions in both the generated props.conf and the report.
+- **Rules → Sigma (in progress).** Detection rules become Sigma rules; pySigma converts them to
+  SPL, KQL, Lucene or ES|QL (`pip install 'rosettalog[sigma-backends]'`,
+  `-O sigma.pysigma_targets=splunk,kusto,lucene,esql`). Rule verification compares the source
+  rule, the Sigma rule and each converted query on real engines, and reports where a pySigma
+  backend does not keep Sigma's meaning. See [docs/rules-support-matrix.md](docs/rules-support-matrix.md).
 - **Architecture.** Frontends and backends are plugins discovered through entry points, so
   adding a SIEM never touches the core. See [docs/architecture.md](docs/architecture.md).
 
@@ -147,7 +154,7 @@ QRadar LSX ─► frontend ─► IR + findings ─► backend ─► target con
 | M0 ✅ | Scaffolding, IR, plugin system, report, CI |
 | M1 ✅ | LSX → Sentinel KQL + Splunk props/transforms, report, verification harness |
 | M2 | AQL: a documented integration point plus an optional adapter that hands queries to an external translator (e.g. Uncoder) and records its output and gaps as findings. No AQL grammar of our own. |
-| M3 | QRadar custom rules and building blocks → IR detection model → **Sigma** only; target conversion is delegated to pySigma |
+| M3 (in progress) | QRadar custom rules and building blocks → IR detection model → **Sigma** only; target conversion is delegated to pySigma. M3a (single-event rules): Sigma backend, pySigma validation/conversion and rule verification done; rule-export parser pending |
 | M4 | Elastic ingest pipelines; opt-in verification against real engines: Elasticsearch, Splunk, Kusto emulator (x86-64 only) and an opt-in ADX runner |
 | M5 | Cortex XSIAM (XQL parsing rules) |
 

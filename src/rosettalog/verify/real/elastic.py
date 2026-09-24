@@ -9,13 +9,14 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Iterator, Sequence
+import secrets
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, ClassVar
 
-from rosettalog.plugins import BackendResult, RealValue
+from rosettalog.plugins import EVENT_ID_FIELD, BackendResult, RealValue, TargetQuery
 from rosettalog.verify.real.docker import (
     RealEngineError,
     container,
@@ -68,6 +69,49 @@ class ElasticSession:
                 row[name] = None if value in (None, "") else str(value)
             rows.append(row)
         return rows
+
+    def run_detection(
+        self, query: TargetQuery, content: str, events: Sequence[Mapping[str, str | int]]
+    ) -> set[str]:
+        """Index ``events`` into a temporary index (every field ``keyword``) and run the query.
+
+        Lucene queries run as ``query_string`` searches on that index. ES|QL queries run
+        unmodified except for their source: pySigma emits ``from *``, which is pointed at the
+        temporary index so that no other index is read. The index is always deleted.
+        """
+        index = f"rl-verify-{secrets.token_hex(6)}"
+        mapping = {
+            "mappings": {
+                "dynamic_templates": [
+                    {"strings": {"match_mapping_type": "string", "mapping": {"type": "keyword"}}}
+                ]
+            }
+        }
+        http_json("PUT", f"{self.base_url}/{index}", mapping)
+        try:
+            for n, event in enumerate(events):
+                http_json("PUT", f"{self.base_url}/{index}/_doc/{n}", dict(event))
+            http_json("POST", f"{self.base_url}/{index}/_refresh")
+            text = content.strip()
+            if query.language == "lucene":
+                body = {
+                    "query": {"query_string": {"query": text}},
+                    "size": len(events) + 1,
+                    "_source": [EVENT_ID_FIELD],
+                }
+                response = http_json("POST", f"{self.base_url}/{index}/_search", body)
+                assert isinstance(response, dict)
+                return {h["_source"][EVENT_ID_FIELD] for h in response["hits"]["hits"]}
+            if query.language == "esql":
+                if not text.startswith("from * "):
+                    raise RealEngineError(f"unexpected ES|QL source clause: {text[:60]!r}")
+                esql = f"from {index} " + text.removeprefix("from * ") + f" | keep {EVENT_ID_FIELD}"
+                response = http_json("POST", f"{self.base_url}/_query", {"query": esql})
+                assert isinstance(response, dict)
+                return {row[0] for row in response["values"]}
+            raise RealEngineError(f"Elasticsearch cannot run {query.language} queries")
+        finally:
+            http_json("DELETE", f"{self.base_url}/{index}")
 
 
 class ElasticRunner:

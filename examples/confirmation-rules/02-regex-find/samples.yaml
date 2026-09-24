@@ -1,0 +1,30 @@
+# Rule confirmation case 02: R02: does a regex test match anywhere in the value?
+# `events` are the lines of sample.log as parsed by ../rl-rules.lsx.xml (e1 = first line, ...).
+# `expected` encodes Rosettalog's CURRENT ASSUMPTION. After observing QRadar CE, record the
+# observed hits and set ground_truth_source to e.g. "observed on QRadar CE 7.5".
+reference_time: '2026-06-01T00:00:00Z'
+ground_truth_source: 'assumed: Rosettalog''s current interpretation; to be confirmed
+  on QRadar CE'
+events:
+- id: e1
+  fields:
+    EventName: login
+    UserName: adm
+    SourceIp: 192.0.2.10
+    DestinationPort: '443'
+- id: e2
+  fields:
+    EventName: login
+    UserName: sysadmin
+    SourceIp: 192.0.2.10
+    DestinationPort: '443'
+- id: e3
+  fields:
+    EventName: login
+    UserName: ADM
+    SourceIp: 192.0.2.10
+    DestinationPort: '443'
+expected:
+  rl_rules_02_regex:
+  - e1
+  - e2

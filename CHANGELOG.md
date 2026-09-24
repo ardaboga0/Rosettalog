@@ -8,6 +8,37 @@ All notable changes to this project are documented here. The format follows
 
 No release has been tagged yet.
 
+### Added (M3a, in progress: rules → Sigma)
+- Detection IR (`Artifact(kind="detection")`, `DetectionSpec`, `And`/`Or`/`Not` over
+  `FieldTest`, `LogSourceTest`, `QidTest`, `RuleRef`, `ReferenceTest`, `Opaque`).
+- Sigma backend (`--to sigma`). The condition structure is kept, and tests Sigma cannot express
+  are dropped only where that broadens the rule (`SIGMA_TEST_DROPPED`). It adds a severity →
+  level convention, a `qradar:` custom attribute, responses reported, a user-supplied
+  `sigma.logsource_map` (never an invented logsource), and deterministic UUIDv5 ids.
+- `sigma` regex dialect: the Sigma `re` subset, with everything outside it reported.
+- `sigma` column in `field_map.yaml` (Sigma taxonomy firewall fields).
+- Optional pinned extras `sigma` / `sigma-backends` (pySigma 1.5.1; Splunk 2.1.0, Kusto 1.0.1,
+  Elasticsearch 2.1.1 backends). Rules are validated with all pySigma validators, and
+  `sigma.pysigma_targets` converts them. Refused conversions become `PYSIGMA_BACKEND_GAP`.
+- Rule verification with rule samples (parsed events plus expected hits). It compares the IR
+  evaluator, the Sigma emulator and pySigma queries on the real engines (Splunk `_json`, Kusto
+  `datatable`, a temporary Elasticsearch index), with the `VERIFY_RULE_*` findings.
+- `rosettalog-ir` frontend (`*.ir.json`), the `examples/rules/` synthetic example, the
+  `tests/real/test_rules_differential.py` differential suite, and CI jobs for `sigma check`
+  and for running without the extras.
+- Broadened rules say so in the generated `.yml` (`description` note, `qradar.broader_than_source`,
+  `qradar.dropped_tests`). Findings name the dropped test, and a dropped exclusion raises
+  `SIGMA_EXCLUSION_DROPPED`.
+- Case-sensitive tests are written without `cased`, which every pinned pySigma backend refuses
+  (`SIGMA_CASE_BROADENED`, linked to R01). Under NOT they are dropped instead, since dropping
+  `cased` there would narrow the rule.
+- Rule assumption registry (`frontends/qradar_rules/assumptions.yaml`, R01-R03 for Q5) with QRadar
+  CE confirmation cases in `examples/confirmation-rules/`. The `qradar-rules` frontend provides
+  the registry; its export parser is still pending.
+- `BackendResult.broadened` (generic), so the rule harness no longer checks a Sigma finding code.
+- `docs/rules-support-matrix.md`, including the observed pySigma gaps: G0 `|cased` refused by all
+  backends; G1/G2 Elasticsearch case-sensitivity and regex anchors, seen on Elasticsearch 9.5.4.
+
 ### Added (M4a)
 - Elastic backend: Elasticsearch ingest pipeline (grok, set, date, remove) with ECS field names
   (new `ecs` column in `field_map.yaml`).

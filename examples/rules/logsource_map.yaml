@@ -1,0 +1,3 @@
+# Maps QRadar log source types to Sigma logsources (sigma.logsource_map). Synthetic example.
+log_source_types:
+  Acme Firewall: {category: firewall, product: acme_firewall}

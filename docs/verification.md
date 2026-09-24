@@ -95,6 +95,59 @@ Only the synthetic samples being verified are sent to the engine. Containers pub
 ports on `127.0.0.1` only, carry the label `rosettalog.verify=1`, and are removed afterwards.
 To reuse an engine you already run, set its URL (e.g. `ROSETTALOG_ELASTIC_URL`).
 
+## Detection rules
+
+Rule samples are already-parsed events with the rules' expected hits. The file is recognised by
+its `events` key:
+
+```yaml
+reference_time: 2026-01-05T10:00:00Z
+ground_truth_source: assumed          # or "observed on QRadar CE x.y", "derived from IBM docs"
+reference_data: {Acme Blocked Hosts: [198.51.100.7]}
+events:
+  - id: e1
+    fields: {SourceIp: 192.0.2.10, UserName: sysadmin}   # canonical names; absent = no value
+expected:
+  acme_admin_login_test_net: [e1]     # artifact id (or rule name) -> matching event ids
+```
+
+For every event up to four answers are compared:
+
+| Answer | Where it comes from |
+|---|---|
+| **source** | the IR evaluator: Rosettalog's reading of the source rule |
+| **target emulator** | the Sigma emulator, which interprets the generated YAML per the Sigma spec |
+| **real engines** | each pySigma query (`sigma.pysigma_targets`) run on a real engine (`--engine real`) |
+| **expected** | the sample file |
+
+- Source ≠ expected → `VERIFY_RULE_MISMATCH`.
+- Sigma rule or query ≠ source → `VERIFY_RULE_TARGET_MISMATCH`. Extra matches are expected when
+  tests were dropped (`SIGMA_TEST_DROPPED`); a missed event is a bug unless a finding explains
+  it.
+- Query on a real engine ≠ the Sigma rule → `VERIFY_RULE_DOWNSTREAM_GAP`: pySigma or the engine
+  does not implement the Sigma semantics. Known cases are listed in the
+  [rules support matrix](rules-support-matrix.md#known-downstream-gaps-observed).
+
+How the engines see the events (the only environment choices Rosettalog makes):
+
+- Field names are the Sigma rule's (canonical names mapped through the `sigma` column), with no
+  pySigma pipeline.
+- A field whose sample values are all integers is numeric (like ports in a real schema);
+  everything else is a string.
+- **Splunk:** JSON lines, pretrained sourcetype `_json`, searched as
+  `search index=rl_verify source=<unique> <query>`.
+- **Kusto:** a `datatable` (string, or `long` for numeric fields; a missing string is empty, as
+  in a Log Analytics table) piped into `where <query>`.
+- **Elasticsearch:** a temporary index with every string field mapped as `keyword` (the common
+  ECS convention). Lucene queries run as `query_string`. ES|QL queries run unchanged except that
+  pySigma's `from *` is pointed at that index. The index is always deleted.
+
+```sh
+rosettalog verify examples/rules/acme_rules.ir.json -s examples/rules/samples.yaml --to sigma \
+    -O sigma.pysigma_targets=splunk,kusto,lucene,esql --engine real
+uv run pytest -m real_engine --real-engine tests/real/test_rules_differential.py
+```
+
 ### Runners and pinned images
 
 | Target | Runner | Image (pinned) | Platforms | Resources |

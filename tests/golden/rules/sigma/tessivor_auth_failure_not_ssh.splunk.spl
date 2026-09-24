@@ -1,0 +1,2 @@
+NOT dst_port=22
+| regex EventName="^auth[\\-_]fail(ure)?[0-9]*$"

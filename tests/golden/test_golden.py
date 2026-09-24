@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from rosettalog.pipeline import load_artifacts
 from rosettalog.plugins import get_backend
 from tests.conftest import EXAMPLES, FIXTURES, parse_lsx
 
@@ -29,3 +30,28 @@ def test_golden(case: str, target: str, update_golden: bool) -> None:
             golden.write_text(f.content, encoding="utf-8")
         assert golden.exists(), f"missing golden file {golden}; run pytest --update-golden"
         assert f.content == golden.read_text(encoding="utf-8"), f"{golden} differs"
+
+
+RULES = EXAMPLES / "rules" / "acme_rules.ir.json"
+
+
+def check_golden(path: Path, content: str, update_golden: bool) -> None:
+    if update_golden:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    assert path.exists(), f"missing golden file {path}; run pytest --update-golden"
+    assert content == path.read_text(encoding="utf-8"), f"{path} differs"
+
+
+@pytest.mark.parametrize("queries", [False, True], ids=["sigma", "pysigma"])
+def test_golden_sigma(queries: bool, update_golden: bool) -> None:
+    """Sigma rules; with the pinned pySigma backends installed, also their converted queries."""
+    options = {}
+    if queries:
+        pytest.importorskip("sigma.backends.splunk")
+        options = {"pysigma_targets": "splunk,kusto,lucene,esql"}
+    for artifact in load_artifacts([RULES]):
+        result = get_backend("sigma").generate(artifact, options)
+        for f in result.files:
+            if queries != f.path.endswith(".yml"):
+                check_golden(GOLDEN / "rules" / "sigma" / f.path, f.content, update_golden)

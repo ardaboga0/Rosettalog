@@ -17,7 +17,18 @@ core value is migrating *parsing logic* with honest findings and field-level ver
 - M2 (AQL): only an integration point plus an optional adapter to an external translator, whose
   output and gaps become findings.
 - M3 (rules/building blocks): IR detection model → Sigma only; target queries come from pySigma.
-- M2 and M3 have not been started and need the maintainer's approval.
+- M3 is in progress (approved). M2 has not been started and needs the maintainer's approval.
+- **pySigma boundary:** only `backends/sigma/pysigma.py` talks to pySigma. Never post-process
+  or "fix" pySigma output. A refused construct is `PYSIGMA_BACKEND_GAP`; a query that does not
+  mean what the Sigma rule means (seen on a real engine) is `VERIFY_RULE_DOWNSTREAM_GAP`. Pin
+  it in `tests/real/test_rules_differential.py` and `tests/unit/test_pysigma_gaps.py` and
+  document it in `docs/rules-support-matrix.md`. pySigma and its backends are optional, pinned
+  extras.
+- **Never invent a Sigma logsource.** Use a user-supplied `sigma.logsource_map`; otherwise
+  `product: qradar` with `SIGMA_LOGSOURCE_UNMAPPED`.
+- A rule test Sigma cannot express may only be dropped where that **broadens** the rule
+  (`SIGMA_TEST_DROPPED`). Never narrow a rule silently.
+- Rule fixtures are synthetic. Never use IBM-shipped rules, building blocks or content packs.
 
 ## Non-negotiable rules
 

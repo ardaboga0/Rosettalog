@@ -5,9 +5,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+import yaml
 
 from rosettalog.frontends.qradar_lsx.parser import LsxParser
 from rosettalog.ir import Artifact
+from rosettalog.verify.rule_samples import is_rule_samples
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "tests" / "fixtures" / "lsx"
@@ -67,6 +69,8 @@ def sample_sets() -> list[tuple[Path, Path]]:
     pairs = []
     for base in (EXAMPLES, ROOT / "tests"):
         for path in sorted(base.rglob("*.yaml")):
+            if path in {p for p, _ in rule_sample_sets()}:
+                continue
             if path.name == "samples.yaml":
                 xmls = sorted(path.parent.glob("*.xml"))
                 assert len(xmls) == 1, f"{path}: expected exactly one *.xml next to it"
@@ -75,6 +79,20 @@ def sample_sets() -> list[tuple[Path, Path]]:
                 lsx = path.with_name(path.name.removesuffix(".samples.yaml") + ".lsx.xml")
                 assert lsx.exists(), f"{path}: missing {lsx.name}"
                 pairs.append((path, lsx))
+    return pairs
+
+
+def rule_sample_sets() -> list[tuple[Path, Path]]:
+    """Every rule samples file (it has ``events``), paired with the only ``*.ir.json`` or
+    rule export next to it."""
+    pairs = []
+    for base in (EXAMPLES, ROOT / "tests"):
+        for path in sorted(base.rglob("*samples.yaml")):
+            if not is_rule_samples(yaml.safe_load(path.read_text("utf-8"))):
+                continue
+            rules = sorted(path.parent.glob("*.ir.json"))
+            assert len(rules) == 1, f"{path}: expected exactly one *.ir.json next to it"
+            pairs.append((path, rules[0]))
     return pairs
 
 

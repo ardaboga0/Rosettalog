@@ -133,17 +133,129 @@ class ParserSpec(_Frozen):
         return list(seen)
 
 
+# --- detection model ------------------------------------------------------------------------
+#
+# A detection artifact is a boolean condition over the canonical fields of *one* event, plus
+# metadata and the source rule's responses (which have no detection-language equivalent and are
+# kept so that backends can report them). Every leaf carries the path/line of the source element.
+
+
+class _Leaf(_Frozen):
+    path: str = ""
+    line: int | None = None
+
+
+class FieldTest(_Leaf):
+    """``field`` equals / contains / matches (Java regex) any of ``values``."""
+
+    kind: Literal["field"] = "field"
+    field: str
+    op: Literal["equals", "contains", "regex"]
+    values: list[str] = Field(min_length=1)
+    case_sensitive: bool = True
+
+
+class LogSourceTest(_Leaf):
+    """The event came from one of these log sources (``by="log_source"``) or log source types."""
+
+    kind: Literal["log_source"] = "log_source"
+    by: Literal["log_source", "log_source_type"]
+    values: list[str] = Field(min_length=1)
+
+
+class QidTest(_Leaf):
+    """The event's QRadar-style event identifier (QID) is one of ``values``."""
+
+    kind: Literal["qid"] = "qid"
+    values: list[str] = Field(min_length=1)
+
+
+class RuleRef(_Leaf):
+    """The event matches any/all of the referenced rules or building blocks."""
+
+    kind: Literal["rule_ref"] = "rule_ref"
+    rules: list[str] = Field(min_length=1)
+    """Referenced rule ids as written in the source."""
+    mode: Literal["any", "all"] = "any"
+
+
+class ReferenceTest(_Leaf):
+    """A value of ``fields`` is (not) contained in the reference collection ``collection``."""
+
+    kind: Literal["reference"] = "reference"
+    collection: str
+    collection_type: Literal["set", "map", "map_of_sets", "table", "unknown"] = "unknown"
+    fields: list[str] = Field(default_factory=list)
+
+
+class Opaque(_Leaf):
+    """A source test the frontend could not model. Always accompanied by a source finding."""
+
+    kind: Literal["opaque"] = "opaque"
+    test: str
+    text: str = ""
+
+
+class And(_Frozen):
+    kind: Literal["and"] = "and"
+    items: list[Cond] = Field(min_length=1)
+
+
+class Or(_Frozen):
+    kind: Literal["or"] = "or"
+    items: list[Cond] = Field(min_length=1)
+
+
+class Not(_Frozen):
+    kind: Literal["not"] = "not"
+    item: Cond
+
+
+Cond = Annotated[
+    And | Or | Not | FieldTest | LogSourceTest | QidTest | RuleRef | ReferenceTest | Opaque,
+    Field(discriminator="kind"),
+]
+Leaf = FieldTest | LogSourceTest | QidTest | RuleRef | ReferenceTest | Opaque
+
+
+class Response(_Leaf):
+    """A response/action of the source rule (e.g. create an event, send an email)."""
+
+    kind: str
+    attributes: dict[str, str] = Field(default_factory=dict)
+
+
+class DetectionSpec(_Frozen):
+    rule_id: str
+    uuid: str | None = None
+    name: str
+    notes: str = ""
+    building_block: bool = False
+    rule_type: str = "event"
+    enabled: bool = True
+    condition: Cond
+    severity: int | None = None
+    """0-10 from the source rule's event response, when it has one."""
+    credibility: int | None = None
+    relevance: int | None = None
+    responses: list[Response] = Field(default_factory=list)
+
+
 class Artifact(_Frozen):
     id: str
     """Stable slug, unique within one run; used for output file names."""
     name: str
-    kind: Literal["parser"] = "parser"
+    kind: Literal["parser", "detection"] = "parser"
     source_format: str
     provenance: Provenance
     parser: ParserSpec | None = None
+    detection: DetectionSpec | None = None
     findings: list[Finding] = Field(default_factory=list)
 
 
+And.model_rebuild()
+Or.model_rebuild()
+Not.model_rebuild()
 IfMatch.model_rebuild()
 Coalesce.model_rebuild()
 Lookup.model_rebuild()
@@ -175,3 +287,13 @@ def pattern_ids(expr: Expr) -> list[str]:
 
     walk(expr)
     return list(out)
+
+
+def leaves(cond: Cond) -> list[Leaf]:
+    """All leaf tests of a condition, in source order."""
+    match cond:
+        case And(items=items) | Or(items=items):
+            return [leaf for item in items for leaf in leaves(item)]
+        case Not(item=item):
+            return leaves(item)
+    return [cond]

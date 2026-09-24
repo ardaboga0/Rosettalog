@@ -1,0 +1,27 @@
+# Synthetic, already-parsed events (canonical QRadar property names) for the example rules.
+# Expected hits are Rosettalog's reading of the rules, not observed on QRadar.
+reference_time: 2026-01-05T10:00:00Z
+ground_truth_source: assumed
+reference_data:
+  Acme Blocked Hosts: [198.51.100.7]
+events:
+  - id: e1
+    fields: {LogSourceType: Acme Firewall, SourceIp: 192.0.2.10, UserName: sysadmin, QID: "5000001"}
+  - id: e2
+    fields: {LogSourceType: Acme Firewall, SourceIp: 192.0.2.99, UserName: ADMIN, QID: "5000001"}
+  - id: e3
+    fields: {LogSourceType: Acme Firewall, SourceIp: 192.0.2.11, UserName: SysADM, QID: "5000002"}
+  - id: e4
+    fields: {LogSourceType: Tessivor VPN, EventName: auth_failure2, DestinationPort: "443"}
+  - id: e5
+    fields: {LogSourceType: Tessivor VPN, EventName: auth-fail, DestinationPort: "22"}
+  - id: e6
+    fields: {LogSourceType: Tessivor VPN, EventName: Auth_Failure, DestinationPort: "443"}
+  - id: e7
+    fields: {LogSourceType: Tessivor VPN, EventName: auth_failure}
+  - id: e8
+    fields: {LogSourceType: Acme Firewall, SourceIp: 198.51.100.7, QID: "5000001"}
+expected:
+  acme_admin_login_test_net: [e1, e3]
+  tessivor_auth_failure_not_ssh: [e4, e7]
+  acme_blocked_host_event: [e8]

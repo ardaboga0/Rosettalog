@@ -1,0 +1,1 @@
+LogSourceType:"Acme Firewall" AND (src_ip:(192.0.2.10 OR 192.0.2.11)) AND username:*adm*

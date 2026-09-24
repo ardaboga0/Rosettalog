@@ -1,0 +1,44 @@
+# Single source of truth for the QRadar RULE behaviours Rosettalog ASSUMES where IBM's
+# documentation is silent or ambiguous (the LSX ones live in ../qradar_lsx/assumptions.yaml).
+#
+# Generated from this file (do not edit by hand; run
+# `uv run python -m rosettalog.frontends.qradar_rules.docs_sync` after changing it):
+#   - docs/rules-support-matrix.md              "Assumed rule behaviours" table
+#   - examples/confirmation-rules/README.md     "Cases" table
+# Each entry states what Rosettalog CURRENTLY does (IR evaluator, Sigma backend). Nothing here
+# is confirmed; the status changes only when a QRadar CE result is recorded.
+source_format: qradar-rules
+confirmation_dir: examples/confirmation-rules
+assumptions:
+  - id: R01
+    case: 01-value-case
+    question: Are event-property "equals" and "contains" tests case-sensitive?
+    assumption: >-
+      Yes, unless the test is marked case-insensitive. Sigma output is written case-insensitively
+      anyway (pySigma backends refuse 'cased'), which makes such rules broader.
+    alternatives: >-
+      Case-insensitive: the equals rule also matches admin and ADMIN (e2, e3); the contains rule
+      also matches Admin, ADMIN and xAdminx (e1, e3, e4).
+    scope: per-artifact
+    findings: [SIGMA_CASE_BROADENED]
+    topic: rule-value-case
+
+  - id: R02
+    case: 02-regex-find
+    question: Does a "matches regex" test match anywhere in the value, or must it match the whole value?
+    assumption: Anywhere in the value (java.util.regex find semantics), like LSX patterns.
+    alternatives: The whole value (only 'adm' matches; 'sysadmin' does not).
+    scope: global
+    topic: rule-regex-find
+
+  - id: R03
+    case: 03-missing-property
+    question: How does a test on a property the event does not have evaluate, and its negation?
+    assumption: >-
+      The test is false, so its negation is true: an event without a username matches
+      "NOT username equals bob".
+    alternatives: >-
+      Any test on a missing property makes the rule not match, negated or not (e3 does not
+      match).
+    scope: global
+    topic: rule-missing-property
