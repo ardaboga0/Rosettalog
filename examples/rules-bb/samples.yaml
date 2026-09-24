@@ -1,0 +1,93 @@
+# Synthetic, parsed, timed events for the building-block example. Expected hits are
+# Rosettalog's reading (R09: building blocks are evaluated per event). Rules with an
+# unresolvable reference (cycle, missing) cannot be evaluated; their lists are empty.
+reference_time: '2026-01-06T09:00:00Z'
+ground_truth_source: assumed
+events:
+- id: e1
+  time: '2026-01-06T09:00:00Z'
+  fields:
+    EventName: login_ok
+    SourceIp: 192.0.2.60
+    UserName: admin
+- id: e2
+  time: '2026-01-06T09:00:10Z'
+  fields:
+    EventName: login_ok
+    SourceIp: 192.0.2.60
+    UserName: bob
+- id: e3
+  time: '2026-01-06T09:00:20Z'
+  fields:
+    EventName: login_ok
+    SourceIp: 192.0.2.99
+    UserName: ROOT
+- id: e4
+  time: '2026-01-06T09:05:00Z'
+  fields:
+    EventName: auth_fail
+    SourceIp: 192.0.2.62
+    UserName: admin
+- id: e5
+  time: '2026-01-06T09:06:00Z'
+  fields:
+    EventName: auth_fail
+    SourceIp: 192.0.2.62
+    UserName: admin
+- id: e6
+  time: '2026-01-06T09:07:00Z'
+  fields:
+    EventName: auth_fail
+    SourceIp: 192.0.2.62
+    UserName: admin
+- id: e7
+  time: '2026-01-06T09:10:00Z'
+  fields:
+    EventName: login_ok
+    SourceIp: 192.0.2.61
+    UserName: carol
+- id: e8
+  time: '2026-01-06T09:10:30Z'
+  fields:
+    EventName: login_ok
+    SourceIp: 192.0.2.61
+    UserName: root
+- id: e9
+  time: '2026-01-06T09:20:00Z'
+  fields:
+    EventName: login_ok
+    SourceIp: 192.0.2.99
+    UserName: dave
+expected:
+  bb_acme_admin_users:
+  - e1
+  - e3
+  - e4
+  - e5
+  - e6
+  - e8
+  bb_acme_test_net:
+  - e1
+  - e2
+  - e7
+  - e8
+  bb_cycle_a: []
+  bb_cycle_b: []
+  acme_admin_from_test_net:
+  - e1
+  - e8
+  acme_admin_or_test_net:
+  - e1
+  - e2
+  - e3
+  - e4
+  - e5
+  - e6
+  - e7
+  - e8
+  acme_admin_bruteforce:
+  - SourceIp=192.0.2.62
+  acme_test_net_then_admin:
+  - SourceIp=192.0.2.61
+  acme_uses_cycle: []
+  acme_missing_bb: []

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from rosettalog.ir.findings import Finding
 
@@ -177,6 +177,9 @@ class RuleRef(_Leaf):
     rules: list[str] = Field(min_length=1)
     """Referenced rule ids as written in the source."""
     mode: Literal["any", "all"] = "any"
+    resolved: list[ResolvedRef] | None = None
+    """Filled by :func:`rosettalog.ir.references.resolve_references` when every referenced rule
+    was found among the loaded artifacts (without cycles); ``None`` otherwise."""
 
 
 class ReferenceTest(_Leaf):
@@ -259,15 +262,32 @@ class DetectionSpec(_Frozen):
     building_block: bool = False
     rule_type: str = "event"
     enabled: bool = True
-    condition: Cond
-    """Single-event condition. With ``stateful``, the events that are counted/sequenced must
-    match it."""
+    condition: Cond | None = None
+    """Single-event condition (required unless ``stateful``). With ``stateful``, the events that
+    are counted/sequenced must match it; ``None`` means no condition besides the counter's or
+    the steps' own."""
     stateful: Stateful | None = None
     severity: int | None = None
     """0-10 from the source rule's event response, when it has one."""
     credibility: int | None = None
     relevance: int | None = None
     responses: list[Response] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _condition_required(self) -> DetectionSpec:
+        if self.condition is None and self.stateful is None:
+            raise ValueError("a rule without a counter or sequence needs a condition")
+        return self
+
+
+class ResolvedRef(_Frozen):
+    """A referenced rule or building block, found among the loaded artifacts."""
+
+    ref: str
+    """The reference as written in the source."""
+    artifact_id: str
+    name: str
+    spec: DetectionSpec
 
 
 class Artifact(_Frozen):
@@ -282,11 +302,14 @@ class Artifact(_Frozen):
     findings: list[Finding] = Field(default_factory=list)
 
 
+RuleRef.model_rebuild()
 And.model_rebuild()
 Or.model_rebuild()
 Not.model_rebuild()
 Sequence.model_rebuild()
 IfMatch.model_rebuild()
+DetectionSpec.model_rebuild()
+ResolvedRef.model_rebuild()
 Coalesce.model_rebuild()
 Lookup.model_rebuild()
 ParseTime.model_rebuild()

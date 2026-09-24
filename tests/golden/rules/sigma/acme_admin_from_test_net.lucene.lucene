@@ -1,0 +1,1 @@
+(username:(admin OR root)) AND (src_ip:(192.0.2.60 OR 192.0.2.61))

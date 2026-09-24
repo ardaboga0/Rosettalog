@@ -8,6 +8,22 @@ All notable changes to this project are documented here. The format follows
 
 No release has been tagged yet.
 
+### Added (M3c: building blocks and reference data)
+- Rule references are resolved when loading (`ir/references.py`), by rule id, uuid or name
+  (Q3 is open). Missing, ambiguous and cyclic references are reported (`RULE_REF_*`); a cycle
+  is reported on every member, and rules depending on a broken reference get `RULE_REF_NESTED`.
+- The Sigma backend inlines referenced building blocks into detections (`SIGMA_BB_INLINED`).
+  Correlations reference a building block's own Sigma rule by name where Sigma allows it
+  (`SIGMA_BB_REFERENCED`); the referenced rules travel as `BackendResult.context_files` for
+  pySigma conversion and the Sigma emulator.
+- `SIGMA_REFERENCE_DATA` names the reference set/map and suggests the target mechanism, with
+  nothing generated.
+- Assumption R09 (building blocks are evaluated per event) with confirmation case 09. The
+  `examples/rules-bb/` example includes a cycle and a missing reference.
+- Fixed (found by the rule verification): a correlation referencing a building block did not
+  include that rule's field names, so sample events were not renamed and the Sigma emulator
+  found no group.
+
 ### Added (M3b: counters and sequences)
 - IR `Counter` (event count, or distinct values) and `Sequence` (ordered/unordered steps) as
   `DetectionSpec.stateful`.

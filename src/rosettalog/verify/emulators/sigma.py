@@ -182,6 +182,8 @@ class SigmaEmulator:
         if text is None:
             raise SigmaEvalError("no Sigma rule in the backend output")
         docs = [d for d in yaml.safe_load_all(text) if d]
+        # rules the correlation references by name live in other artifacts' files
+        docs += [d for f in result.context_files for d in yaml.safe_load_all(f.content) if d]
         self.rules = {
             str(d.get("name", "")): SigmaRuleEvaluator(d) for d in docs if "detection" in d
         }

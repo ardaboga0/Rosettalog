@@ -51,6 +51,18 @@ refuted) when the report is built, and the text ends with `[Assumption <id>: <st
 |---|---|---|
 | `IR_INVALID` | UNSUPPORTED | The file is not valid Rosettalog IR. |
 
+## Rule references (building blocks)
+
+References between detection rules are resolved when the artifacts are loaded
+(`ir/references.py`), by rule id, uuid or name.
+
+| Code | Status | Meaning |
+|---|---|---|
+| `RULE_REF_MISSING` | PARTIAL | A referenced rule or building block is not among the loaded rules. The reference stays unresolved; backends that cannot express it drop it (broader). |
+| `RULE_REF_AMBIGUOUS` | PARTIAL | A reference matches several loaded rules, so it is not resolved. |
+| `RULE_REF_NESTED` | PARTIAL | A referenced rule itself contains an unresolved reference (missing, ambiguous or cyclic), so part of its logic is missing in this rule too. |
+| `RULE_REF_CYCLE` | UNSUPPORTED | References form a cycle (spelled out in the message). It is reported on every rule in the cycle; the reference that closes it stays unresolved. |
+
 ## Regular expressions (Java → target engine)
 
 | Code | Status | Meaning |
@@ -146,6 +158,9 @@ refuted) when the report is built, and the text ends with `[Assumption <id>: <st
 | `SIGMA_COUNTER_GROUPING` | PARTIAL/FULL/UNSUPPORTED | A counter groups by several properties; Sigma `group-by` counts per combination. Linked to R05. |
 | `SIGMA_SEQUENCE_GAPS` | PARTIAL/FULL | A sequence became a `temporal(_ordered)` correlation, which lets other events occur between the steps. Linked to R07: PARTIAL (broader) if QRadar does not allow that. |
 | `SIGMA_SEQUENCE_WINDOW` | PARTIAL/FULL/UNSUPPORTED | In the correlation, all steps must fall within the timespan (first to last). Linked to R08: UNSUPPORTED if QRadar measures its window differently, because the Sigma rule would then miss sequences. |
+| `SIGMA_BB_INLINED` | FULL | A referenced building block's tests were copied into the rule (any → OR, all → AND), because a Sigma detection cannot reference another rule. The message names the building block's own Sigma file. |
+| `SIGMA_BB_REFERENCED` | FULL | A correlation references a building block's Sigma rule by name (it is written to that rule's own file); deploy both together. |
+| `SIGMA_REFERENCE_DATA` | PARTIAL | A reference set/map test. It names the collection, its type and the fields, and suggests the target mechanism (Sentinel watchlist, Splunk lookup, Elasticsearch enrich policy / terms lookup). Nothing is generated; the test is dropped (`SIGMA_TEST_DROPPED`, broader). |
 | `SIGMA_CONDITION_EMPTY` | UNSUPPORTED | Nothing of the rule's condition could be expressed, so no rule was written (it would match every event). |
 | `SIGMA_REGEX_UNSUPPORTED` | UNSUPPORTED | The regex needs a construct outside the Sigma `re` subset (lookaround, backreferences, `\b`, possessive/atomic, scoped or mid-pattern flags, Unicode properties). The test is handled as in `SIGMA_TEST_DROPPED`. |
 | `SIGMA_REGEX_END_ANCHOR` | PARTIAL | Java `\z` (absolute end) became `$`, which also matches before a final line break. |

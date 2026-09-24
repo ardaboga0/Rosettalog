@@ -1,0 +1,1 @@
+any where (username like~ ("admin", "root")) and (src_ip like~ ("192.0.2.60", "192.0.2.61"))

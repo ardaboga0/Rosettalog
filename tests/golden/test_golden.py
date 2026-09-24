@@ -35,6 +35,7 @@ def test_golden(case: str, target: str, update_golden: bool) -> None:
 RULES = [
     EXAMPLES / "rules" / "acme_rules.ir.json",
     EXAMPLES / "rules-stateful" / "stateful_rules.ir.json",
+    EXAMPLES / "rules-bb" / "bb_rules.ir.json",
 ]
 
 
@@ -53,7 +54,7 @@ def test_golden_sigma(queries: bool, update_golden: bool) -> None:
     if queries:
         pytest.importorskip("sigma.backends.splunk")
         options = {"pysigma_targets": "splunk,kusto,lucene,esql,eql"}
-    for artifact in load_artifacts(RULES):
+    for artifact in load_artifacts(RULES):  # references resolve within the loaded set
         result = get_backend("sigma").generate(artifact, options)
         for f in result.files:
             if queries != f.path.endswith(".yml"):

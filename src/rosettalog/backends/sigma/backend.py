@@ -45,6 +45,7 @@ from rosettalog.ir import (
     Or,
     QidTest,
     ReferenceTest,
+    ResolvedRef,
     RuleRef,
     Sequence,
     Status,
@@ -172,8 +173,10 @@ class _Builder:
 
     # --- log source -----------------------------------------------------------------------
 
-    def pick_logsource(self, cond: Cond) -> Cond | _True:
+    def pick_logsource(self, cond: Cond | None) -> Cond | _True:
         """Move one top-level, single-valued, mapped log source test into ``logsource``."""
+        if cond is None:
+            return TRUE
         conjuncts = cond.items if isinstance(cond, And) else [cond]
         for i, item in enumerate(conjuncts):
             if not isinstance(item, LogSourceTest):
@@ -272,19 +275,14 @@ class _Builder:
                 )
                 return self.add_selection(None, QID_FIELD, list(cond.values))
             case RuleRef():
-                return self.drop(
-                    cond.path,
-                    f"Reference to rule(s)/building block(s) {', '.join(cond.rules)}.",
-                    positive,
-                    suggestion="Inline the referenced building block's tests by hand.",
-                )
+                return self.rule_ref(cond, positive)
             case ReferenceTest():
+                self.reference_data(cond)
                 return self.drop(
                     cond.path,
                     f"Reference data test on '{cond.collection}'.",
                     positive,
-                    suggestion="Recreate the reference data on the target (watchlist, lookup, "
-                    "enrich policy) and add the lookup to the converted query.",
+                    suggestion="See SIGMA_REFERENCE_DATA for the target mechanism.",
                 )
             case Opaque():
                 return self.drop(
@@ -294,6 +292,59 @@ class _Builder:
                     suggestion="Translate this test by hand.",
                 )
         raise AssertionError(cond)  # pragma: no cover
+
+    def rule_ref(self, ref: RuleRef, positive: bool) -> Approx:
+        """Inline referenced rules/building blocks: Sigma detections cannot reference rules."""
+        names = ", ".join(ref.rules)
+        if ref.resolved is None:
+            return self.drop(
+                ref.path,
+                f"Reference to rule(s)/building block(s) {names}, which could not be resolved "
+                "(see the RULE_REF_* finding).",
+                positive,
+                suggestion="Load the referenced rules too, or inline their tests by hand.",
+            )
+        parts: list[Cond] = []
+        for target in ref.resolved:
+            spec = target.spec
+            if spec.stateful is not None or spec.condition is None:
+                return self.drop(
+                    ref.path,
+                    f"Reference to '{target.name}', a counter/sequence rule; a Sigma detection "
+                    "cannot contain a correlation.",
+                    positive,
+                    suggestion="Rebuild the combined logic as a correlation on the target.",
+                )
+            parts.append(spec.condition)
+        listed = ", ".join(f"'{t.name}' ({t.artifact_id}.yml)" for t in ref.resolved)
+        self.finding(
+            Status.FULL,
+            "SIGMA_BB_INLINED",
+            ref.path,
+            f"The tests of {listed} were inlined ({ref.mode} of them), because a Sigma detection "
+            "cannot reference another rule. Changes to the building block must be repeated here.",
+        )
+        inlined: Cond = (
+            parts[0]
+            if len(parts) == 1
+            else (Or(items=parts) if ref.mode == "any" else And(items=parts))
+        )
+        return self.approx(inlined, positive)
+
+    def reference_data(self, test: ReferenceTest) -> None:
+        fields = ", ".join(test.fields) or "(unknown fields)"
+        self.finding(
+            Status.PARTIAL,
+            "SIGMA_REFERENCE_DATA",
+            test.path,
+            f"The test checks {fields} against the reference {test.collection_type} "
+            f"'{test.collection}'. Sigma has no reference data, so it was left out, and nothing "
+            "was generated for it.",
+            suggestion=f"Recreate '{test.collection}' on the target and add the lookup to the "
+            "converted query: a Microsoft Sentinel watchlist (_GetWatchlist('<alias>')), a "
+            "Splunk lookup (| lookup / inputlookup), or an Elasticsearch enrich policy or terms "
+            "lookup.",
+        )
 
     def field_test(self, test: FieldTest, positive: bool) -> Approx:
         if test.op in ("equals", "contains"):
@@ -435,6 +486,16 @@ def rule_uuid(spec: DetectionSpec, suffix: str = "") -> str:
     return str(uuid.uuid5(ID_NAMESPACE, f"qradar-rule:{spec.uuid or spec.rule_id}{suffix}"))
 
 
+def _single_ref(cond: Cond | _True) -> ResolvedRef | None:
+    """The one plain (non-stateful) rule a condition consists of, if it is just a reference."""
+    if not isinstance(cond, RuleRef) or cond.resolved is None or len(cond.resolved) != 1:
+        return None
+    target = cond.resolved[0]
+    if target.spec.stateful is not None or target.spec.condition is None:
+        return None
+    return target
+
+
 def timespan(seconds: int) -> str:
     """A Sigma timespan (number + s/m/h/d), in the largest unit that is exact."""
     for unit, size in (("d", 86400), ("h", 3600), ("m", 60)):
@@ -479,18 +540,56 @@ class SigmaBackend:
 
         base = b.pick_logsource(spec.condition)
         # (name suffix, title suffix, condition) of every single-event rule to write
-        parts: list[tuple[str, str, Cond | _True]] = []
+        # Rules a correlation can reference by name instead of copying them (building blocks).
+        context: dict[str, str] = {}
+        context_names: dict[str, str] = {}
+        """Field names used by the referenced rules (they are part of what the output tests)."""
+
+        def reference(cond: Cond | _True) -> ResolvedRef | None:
+            target = _single_ref(cond)
+            if target is None or spec.stateful is None:
+                return None
+            if target.artifact_id not in context:
+                bb = Artifact(
+                    id=target.artifact_id,
+                    name=target.name,
+                    kind="detection",
+                    source_format=artifact.source_format,
+                    provenance=artifact.provenance,
+                    detection=target.spec,
+                )
+                bb_options = {k: v for k, v in options.items() if k != "pysigma_targets"}
+                bb_result = self.generate(bb, bb_options)
+                rule = next((f for f in bb_result.files), None)
+                if rule is None:
+                    return None
+                context[target.artifact_id] = rule.content
+                context_names.update(bb_result.field_names)
+            b.finding(
+                Status.FULL,
+                "SIGMA_BB_REFERENCED",
+                getattr(cond, "path", ""),
+                f"The correlation references the Sigma rule '{target.artifact_id}' (building "
+                f"block '{target.name}', written to {target.artifact_id}.yml) by name. Deploy "
+                "both files together.",
+            )
+            return target
+
+        parts: list[tuple[str, str, Cond | _True | ResolvedRef]] = []
         match spec.stateful:
             case None:
                 parts.append(("", "", base))
             case Counter():
-                parts.append(("_events", " (counted events)", base))
+                parts.append(("_events", " (counted events)", reference(base) or base))
             case Sequence(steps=steps):
                 for n, step in enumerate(steps, 1):
                     both = step if isinstance(base, _True) else And(items=[base, step])
-                    parts.append((f"_step{n}", f" (step {n})", both))
+                    ref = reference(step) if isinstance(base, _True) else None
+                    parts.append((f"_step{n}", f" (step {n})", ref or both))
         approxes: list[Cond] = []
         for suffix, _, part in parts:
+            if isinstance(part, ResolvedRef):
+                continue
             approx = TRUE if isinstance(part, _True) else b.approx(part, True)
             if isinstance(approx, _True | _False):
                 what = f"step {suffix.removeprefix('_step')}" if "step" in suffix else "rule"
@@ -530,18 +629,25 @@ class SigmaBackend:
         if spec.stateful is None:
             docs = [self._rule(artifact, spec, logsource, detections[0], broadened=b.broadened)]
         else:
-            docs = [
-                self._base_rule(artifact, spec, suffix, title, logsource, detection)
-                for (suffix, title, _), detection in zip(parts, detections, strict=True)
-            ]
-            docs.append(
-                self._correlation(artifact, spec, [str(d["name"]) for d in docs], naming.names, b)
-            )
+            docs = []
+            rules: list[str] = []
+            own = iter(detections)
+            for suffix, title, part in parts:
+                if isinstance(part, ResolvedRef):
+                    rules.append(part.artifact_id)
+                    continue
+                docs.append(self._base_rule(artifact, spec, suffix, title, logsource, next(own)))
+                rules.append(artifact.id + suffix)
+            docs.append(self._correlation(artifact, spec, rules, naming.names, b))
         text = "---\n".join(dump_yaml(d) for d in docs)
         files = [GeneratedFile(path=f"{artifact.id}.yml", content=text)]
+        context_files = [GeneratedFile(path=f"{k}.yml", content=v) for k, v in context.items()]
         group_by = [naming.names[f] for f in spec.stateful.group_by] if spec.stateful else None
         check = pysigma.check_and_convert(
-            text, options.get("pysigma_targets", ""), artifact.id, group_by=group_by
+            "---\n".join([text, *context.values()]),
+            options.get("pysigma_targets", ""),
+            artifact.id,
+            group_by=group_by,
         )
         files.extend(check.files)
         b.findings.extend(check.findings)
@@ -550,11 +656,12 @@ class SigmaBackend:
             artifact_id=artifact.id,
             files=files,
             findings=b.findings,
-            field_names=dict(naming.names),
+            field_names={**context_names, **naming.names},
             options=dict(options),
             queries=check.queries,
             output_kind="detection",
             broadened=bool(b.broadened),
+            context_files=context_files,
         )
 
     @staticmethod

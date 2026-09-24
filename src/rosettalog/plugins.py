@@ -98,6 +98,10 @@ class BackendResult(BaseModel):
     output_kind: Literal["parser", "detection"] = "parser"
     broadened: bool = False
     """Detection output intentionally matches a superset of the source rule's events."""
+    context_files: list[GeneratedFile] = Field(default_factory=list)
+    """Content the output depends on but does not write, because another artifact writes it
+    (e.g. building-block rules a correlation references by name). Used for validation and
+    emulation."""
     """A parser is only usable if it produces fields; a detection rule may test none."""
 
     @property

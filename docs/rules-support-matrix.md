@@ -7,7 +7,7 @@ write its own query renderers, and it does not patch pySigma's output. When a ba
 construct or changes its meaning, that is reported as a gap in the downstream tool.
 
 > [!NOTE]
-> **Status (M3a in progress).** The detection IR, the Sigma backend, pySigma validation and
+> **Status (M3a-M3c on IR input).** The detection IR, the Sigma backend, pySigma validation and
 > conversion, and rule verification (IR evaluator, Sigma emulator, real engines) are
 > implemented. The **QRadar rule export parser is not yet implemented**. IBM publishes no schema
 > for the rule XML inside content-management exports, and its test-parameter encoding must be
@@ -25,8 +25,11 @@ construct or changes its meaning, that is reported as a gap in the downstream to
 | AND / OR / NOT | one search identifier per test; the condition keeps the source's structure | FULL |
 | Log source / log source type | the Sigma `logsource`, **only** from a `sigma.logsource_map` you provide; otherwise kept as a test on `LogSource`/`LogSourceType` | FULL (mapped) / PARTIAL |
 | QID in list | kept as a test on the pseudo-field `QID` | PARTIAL (`SIGMA_QID_CONDITION`) |
-| Rule / building-block reference | not yet translated (M3c); dropped, broadening the rule | PARTIAL (`SIGMA_TEST_DROPPED`) |
-| Reference set/map test | not translated (M3c: named, with the target mechanism); dropped, broadening the rule | PARTIAL (`SIGMA_TEST_DROPPED`) |
+| Rule / building-block reference in a rule | the building block's tests are **inlined** (any → OR, all → AND, recursively), because a Sigma detection cannot reference a rule. Every building block is also written as its own Sigma rule | FULL note (`SIGMA_BB_INLINED`), per R09 |
+| Building block as a counter's events, or as a sequence step (with no other rule condition) | the correlation **references the building block's own Sigma rule by name** (`rules: [<bb id>]`); deploy both files | FULL note (`SIGMA_BB_REFERENCED`) |
+| Unresolvable reference: missing, ambiguous, cycle, or nested in a referenced rule | reported when loading (`RULE_REF_MISSING`/`_AMBIGUOUS`/`_CYCLE`/`_NESTED`); the reference is dropped, broadening the rule | PARTIAL / UNSUPPORTED (cycle) |
+| Reference to a counter/sequence rule inside a detection | dropped (Sigma detections cannot contain a correlation) | PARTIAL (`SIGMA_TEST_DROPPED`) |
+| Reference set/map test | not generated; the finding names the collection, its type and fields, and the target mechanism (Sentinel watchlist, Splunk lookup, Elasticsearch enrich policy / terms lookup); the test is dropped, broadening the rule | PARTIAL (`SIGMA_REFERENCE_DATA`, `SIGMA_TEST_DROPPED`) |
 | Test not understood by the frontend | dropped, broadening the rule | PARTIAL (`SIGMA_TEST_DROPPED`) |
 | Counter: at least N events, same X, within T | a base rule (`<id>_events`) plus an `event_count` correlation (`group-by`, `timespan`, `condition: {gte: N}`), in one multi-document `.yml` | PARTIAL until R04 (sliding window) and, for several fields, R05 (per-combination grouping) are confirmed (`SIGMA_COUNTER_WINDOW`, `SIGMA_COUNTER_GROUPING`) |
 | Counter: at least N different values of F | `value_count` correlation with `condition.field` | as above |
@@ -119,6 +122,7 @@ encoding) are not assumptions: the rule-export parser waits for them.
 | R06 | Once a counter's threshold is reached, does the rule fire once, or again for every further event in the window? | Once per group and window, at the event that reaches the threshold (e2). Verification compares which groups alert, not how often, so this only affects the number of alerts. | global: listed in every report while not confirmed | [06](../examples/confirmation-rules/06-counter-firing) | unconfirmed |
 | R07 | In a sequence ("in the order"), may other events occur between the steps? | Yes. Only the order of the step events matters (Sigma temporal_ordered). | per artifact: `SIGMA_SEQUENCE_GAPS` | [07](../examples/confirmation-rules/07-sequence-gaps) | unconfirmed |
 | R08 | Is a sequence's "within N minutes" measured from the first to the last step? | Yes. All steps must fall within N minutes of the first one (Sigma: all events inside the timespan). | per artifact: `SIGMA_SEQUENCE_WINDOW` | [08](../examples/confirmation-rules/08-sequence-window) | unconfirmed |
+| R09 | Are building blocks evaluated per event, so that "matches any of these rules" is an OR of the building blocks' tests on that event, and "matches all" an AND on that same event? | Yes. A referenced building block is equivalent to its tests, applied to the same event, so Rosettalog inlines them into rules (Sigma cannot reference rules in a detection). | global: listed in every report while not confirmed | [09](../examples/confirmation-rules/09-building-blocks) | unconfirmed |
 <!-- END GENERATED: rule-assumptions -->
 
 ## pySigma backends (pinned)

@@ -1,0 +1,23 @@
+title: 'Acme: rule referencing a building block that was not exported'
+id: 69d665c8-4169-5f7b-ba1f-073ecb7518f4
+name: acme_missing_bb
+status: experimental
+description: 'Rosettalog: this rule is BROADER than the source QRadar rule (tests: test[2]); it may match
+  events the original does not. See qradar.dropped_tests.'
+logsource:
+  product: qradar
+detection:
+  sel_1:
+    EventName: login_ok
+  condition: sel_1
+qradar:
+  rule_id: '200106'
+  enabled: true
+  building_block: false
+  rule_type: event
+  broader_than_source: true
+  dropped_tests:
+  - test: test[2]
+    dropped: Reference to rule(s)/building block(s) 299999, which could not be resolved (see the RULE_REF_*
+      finding).
+    exclusion: false

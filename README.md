@@ -154,7 +154,7 @@ QRadar LSX ─► frontend ─► IR + findings ─► backend ─► target con
 | M0 ✅ | Scaffolding, IR, plugin system, report, CI |
 | M1 ✅ | LSX → Sentinel KQL + Splunk props/transforms, report, verification harness |
 | M2 | AQL: a documented integration point plus an optional adapter that hands queries to an external translator (e.g. Uncoder) and records its output and gaps as findings. No AQL grammar of our own. |
-| M3 (in progress) | QRadar custom rules and building blocks → IR detection model → **Sigma** only; target conversion is delegated to pySigma. M3a (single-event rules) and M3b (counters, sequences → Sigma correlations) done on IR input; rule-export parser pending (needs a QRadar CE export) |
+| M3 (in progress) | QRadar custom rules and building blocks → IR detection model → **Sigma** only; target conversion is delegated to pySigma. M3a (single-event rules), M3b (counters, sequences → Sigma correlations) and M3c (building blocks, reference data) done on IR input; rule-export parser pending (needs a QRadar CE export) |
 | M4 | Elastic ingest pipelines; opt-in verification against real engines: Elasticsearch, Splunk, Kusto emulator (x86-64 only) and an opt-in ADX runner |
 | M5 | Cortex XSIAM (XQL parsing rules) |
 

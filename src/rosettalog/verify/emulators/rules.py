@@ -49,7 +49,7 @@ class NotEvaluable(Exception):
 class RuleEvaluator:
     def __init__(
         self,
-        cond: Cond,
+        cond: Cond | None,
         *,
         reference_data: Mapping[str, Sequence[str]] | None = None,
     ) -> None:
@@ -57,14 +57,14 @@ class RuleEvaluator:
         self.reference_data = reference_data or {}
 
     def matches(self, event: Mapping[str, str]) -> bool:
-        return self._eval(self.cond, event)
+        return self.cond is None or self._eval(self.cond, event)
 
     def _matches_cond(self, cond: Cond) -> _Predicate:
         return lambda fields: self._eval(cond, fields)  # type: ignore[arg-type]
 
     def alerting_groups(self, spec: DetectionSpec, events: Sequence[TimedEvent]) -> set[str]:
         """Group keys a counter/sequence rule alerts on (see the windows module)."""
-        matching = [e for e in events if self._eval(self.cond, e.fields)]  # type: ignore[arg-type]
+        matching = [e for e in events if self.matches(e.fields)]  # type: ignore[arg-type]
         match spec.stateful:
             case Counter() as c:
                 return count_groups(
@@ -100,8 +100,16 @@ class RuleEvaluator:
                     raise NotEvaluable(f"no reference data '{name}' in the samples")
                 members = set(self.reference_data[name])
                 return any(event.get(f) in members for f in fields)
-            case RuleRef():
-                raise NotEvaluable("rule references are not evaluated")
+            case RuleRef(resolved=None):
+                raise NotEvaluable("unresolved rule reference")
+            case RuleRef(resolved=targets, mode=mode):
+                results = []
+                for target in targets or []:
+                    spec = target.spec
+                    if spec.stateful is not None or spec.condition is None:
+                        raise NotEvaluable(f"'{target.ref}' is a counter/sequence rule")
+                    results.append(self._eval(spec.condition, event))
+                return any(results) if mode == "any" else all(results)
             case Opaque(test=test):
                 raise NotEvaluable(f"source test '{test}' is not modelled")
         raise AssertionError(cond)  # pragma: no cover

@@ -1,0 +1,3 @@
+from * metadata _id, _index, _version | where username in ("admin", "root")
+| eval timebucket=date_trunc(5minutes, @timestamp) | stats event_count=count() by timebucket, src_ip
+| where event_count >= 3

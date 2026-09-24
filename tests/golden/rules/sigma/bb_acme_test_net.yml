@@ -1,0 +1,17 @@
+title: 'BB: Acme documentation network sources'
+id: ab12630f-ba12-5631-add4-9ea54e81b254
+name: bb_acme_test_net
+status: experimental
+logsource:
+  product: qradar
+detection:
+  sel_1:
+    src_ip:
+    - 192.0.2.60
+    - 192.0.2.61
+  condition: sel_1
+qradar:
+  rule_id: '200002'
+  enabled: true
+  building_block: true
+  rule_type: event

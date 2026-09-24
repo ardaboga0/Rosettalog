@@ -1,0 +1,1 @@
+from * metadata _id, _index, _version | where (username in ("admin", "root")) and (src_ip in ("192.0.2.60", "192.0.2.61"))

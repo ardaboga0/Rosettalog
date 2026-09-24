@@ -1,0 +1,17 @@
+title: 'BB: Acme admin accounts'
+id: a1a609bf-21ce-5db3-bd5a-95c76b4d11fa
+name: bb_acme_admin_users
+status: experimental
+logsource:
+  product: qradar
+detection:
+  sel_1:
+    username:
+    - admin
+    - root
+  condition: sel_1
+qradar:
+  rule_id: '200001'
+  enabled: true
+  building_block: true
+  rule_type: event

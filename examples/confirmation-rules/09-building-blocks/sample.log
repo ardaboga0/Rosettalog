@@ -1,0 +1,3 @@
+<13>Mar 24 10:00:00 rl-rules-09 rltest: evt=bb user=x src=192.0.2.10 dport=22
+<13>Mar 24 10:00:00 rl-rules-09 rltest: evt=bb user=y src=192.0.2.10 dport=443
+<13>Mar 24 10:00:00 rl-rules-09 rltest: evt=bb user=x src=192.0.2.10 dport=443

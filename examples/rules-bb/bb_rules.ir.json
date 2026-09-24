@@ -1,0 +1,316 @@
+[
+  {
+    "id": "bb_acme_admin_users",
+    "name": "BB: Acme admin accounts",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/rules-bb/bb_rules.ir.json"
+    },
+    "detection": {
+      "rule_id": "200001",
+      "name": "BB: Acme admin accounts",
+      "building_block": true,
+      "condition": {
+        "kind": "field",
+        "field": "UserName",
+        "op": "equals",
+        "values": [
+          "admin",
+          "root"
+        ],
+        "case_sensitive": false,
+        "path": "test[1]"
+      }
+    }
+  },
+  {
+    "id": "bb_acme_test_net",
+    "name": "BB: Acme documentation network sources",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/rules-bb/bb_rules.ir.json"
+    },
+    "detection": {
+      "rule_id": "200002",
+      "name": "BB: Acme documentation network sources",
+      "building_block": true,
+      "condition": {
+        "kind": "field",
+        "field": "SourceIp",
+        "op": "equals",
+        "values": [
+          "192.0.2.60",
+          "192.0.2.61"
+        ],
+        "case_sensitive": false,
+        "path": "test[1]"
+      }
+    }
+  },
+  {
+    "id": "bb_cycle_a",
+    "name": "BB: cycle A",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/rules-bb/bb_rules.ir.json"
+    },
+    "detection": {
+      "rule_id": "200003",
+      "name": "BB: cycle A",
+      "building_block": true,
+      "condition": {
+        "kind": "and",
+        "items": [
+          {
+            "kind": "field",
+            "field": "EventName",
+            "op": "equals",
+            "values": [
+              "login_ok"
+            ],
+            "case_sensitive": false,
+            "path": "test[1]"
+          },
+          {
+            "kind": "rule_ref",
+            "rules": [
+              "200004"
+            ],
+            "mode": "any",
+            "path": "test[2]"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "bb_cycle_b",
+    "name": "BB: cycle B",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/rules-bb/bb_rules.ir.json"
+    },
+    "detection": {
+      "rule_id": "200004",
+      "name": "BB: cycle B",
+      "building_block": true,
+      "condition": {
+        "kind": "and",
+        "items": [
+          {
+            "kind": "field",
+            "field": "UserName",
+            "op": "equals",
+            "values": [
+              "dave"
+            ],
+            "case_sensitive": false,
+            "path": "test[1]"
+          },
+          {
+            "kind": "rule_ref",
+            "rules": [
+              "200003"
+            ],
+            "mode": "any",
+            "path": "test[2]"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "acme_admin_from_test_net",
+    "name": "Acme: admin account from the documentation network",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/rules-bb/bb_rules.ir.json"
+    },
+    "detection": {
+      "rule_id": "200101",
+      "name": "Acme: admin account from the documentation network",
+      "severity": 6,
+      "condition": {
+        "kind": "rule_ref",
+        "rules": [
+          "200001",
+          "200002"
+        ],
+        "mode": "all",
+        "path": "test[1]"
+      }
+    }
+  },
+  {
+    "id": "acme_admin_or_test_net",
+    "name": "Acme: admin account or documentation network",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/rules-bb/bb_rules.ir.json"
+    },
+    "detection": {
+      "rule_id": "200102",
+      "name": "Acme: admin account or documentation network",
+      "severity": 3,
+      "condition": {
+        "kind": "rule_ref",
+        "rules": [
+          "200001",
+          "200002"
+        ],
+        "mode": "any",
+        "path": "test[1]"
+      }
+    }
+  },
+  {
+    "id": "acme_admin_bruteforce",
+    "name": "Acme: at least 3 admin-account events from one source in 5 minutes",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/rules-bb/bb_rules.ir.json"
+    },
+    "detection": {
+      "rule_id": "200103",
+      "name": "Acme: at least 3 admin-account events from one source in 5 minutes",
+      "severity": 7,
+      "condition": {
+        "kind": "rule_ref",
+        "rules": [
+          "200001"
+        ],
+        "mode": "any",
+        "path": "test[1]"
+      },
+      "stateful": {
+        "kind": "counter",
+        "count": 3,
+        "window_s": 300,
+        "group_by": [
+          "SourceIp"
+        ],
+        "path": "test[2]"
+      }
+    }
+  },
+  {
+    "id": "acme_test_net_then_admin",
+    "name": "Acme: documentation-network event, then admin account, same source, 2 minutes",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/rules-bb/bb_rules.ir.json"
+    },
+    "detection": {
+      "rule_id": "200104",
+      "name": "Acme: documentation-network event, then admin account, same source, 2 minutes",
+      "severity": 5,
+      "stateful": {
+        "kind": "sequence",
+        "ordered": true,
+        "window_s": 120,
+        "group_by": [
+          "SourceIp"
+        ],
+        "path": "test[1]",
+        "steps": [
+          {
+            "kind": "rule_ref",
+            "rules": [
+              "200002"
+            ],
+            "mode": "any",
+            "path": "test[1]/step[1]"
+          },
+          {
+            "kind": "rule_ref",
+            "rules": [
+              "200001"
+            ],
+            "mode": "any",
+            "path": "test[1]/step[2]"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "acme_uses_cycle",
+    "name": "Acme: rule using a cyclic building block",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/rules-bb/bb_rules.ir.json"
+    },
+    "detection": {
+      "rule_id": "200105",
+      "name": "Acme: rule using a cyclic building block",
+      "condition": {
+        "kind": "and",
+        "items": [
+          {
+            "kind": "field",
+            "field": "EventName",
+            "op": "equals",
+            "values": [
+              "login_ok"
+            ],
+            "case_sensitive": false,
+            "path": "test[1]"
+          },
+          {
+            "kind": "rule_ref",
+            "rules": [
+              "200003"
+            ],
+            "mode": "any",
+            "path": "test[2]"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "acme_missing_bb",
+    "name": "Acme: rule referencing a building block that was not exported",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/rules-bb/bb_rules.ir.json"
+    },
+    "detection": {
+      "rule_id": "200106",
+      "name": "Acme: rule referencing a building block that was not exported",
+      "condition": {
+        "kind": "and",
+        "items": [
+          {
+            "kind": "field",
+            "field": "EventName",
+            "op": "equals",
+            "values": [
+              "login_ok"
+            ],
+            "case_sensitive": false,
+            "path": "test[1]"
+          },
+          {
+            "kind": "rule_ref",
+            "rules": [
+              "299999"
+            ],
+            "mode": "any",
+            "path": "test[2]"
+          }
+        ]
+      }
+    }
+  }
+]

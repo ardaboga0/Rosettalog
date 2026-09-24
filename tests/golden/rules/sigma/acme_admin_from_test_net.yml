@@ -1,0 +1,23 @@
+title: 'Acme: admin account from the documentation network'
+id: 6be4d6d7-a11e-55d2-9d1f-e4be8d0c7726
+name: acme_admin_from_test_net
+status: experimental
+logsource:
+  product: qradar
+detection:
+  sel_1:
+    username:
+    - admin
+    - root
+  sel_2:
+    src_ip:
+    - 192.0.2.60
+    - 192.0.2.61
+  condition: sel_1 and sel_2
+level: medium
+qradar:
+  rule_id: '200101'
+  enabled: true
+  building_block: false
+  rule_type: event
+  severity: 6

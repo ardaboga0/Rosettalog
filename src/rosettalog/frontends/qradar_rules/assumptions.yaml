@@ -98,3 +98,17 @@ assumptions:
     scope: per-artifact
     findings: [SIGMA_SEQUENCE_WINDOW]
     topic: rule-sequence-window
+
+  - id: R09
+    case: 09-building-blocks
+    question: >-
+      Are building blocks evaluated per event, so that "matches any of these rules" is an OR of
+      the building blocks' tests on that event, and "matches all" an AND on that same event?
+    assumption: >-
+      Yes. A referenced building block is equivalent to its tests, applied to the same event, so
+      Rosettalog inlines them into rules (Sigma cannot reference rules in a detection).
+    alternatives: >-
+      "All" is satisfied across different events (e.g. e1 and e2 together, so the all-rule also
+      fires for e2), or building blocks keep state of their own.
+    scope: global
+    topic: rule-building-blocks

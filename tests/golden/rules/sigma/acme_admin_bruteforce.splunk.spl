@@ -1,0 +1,6 @@
+username IN ("admin", "root")
+
+| bin _time span=5m
+| stats count as event_count by _time src_ip
+
+| search event_count >= 3

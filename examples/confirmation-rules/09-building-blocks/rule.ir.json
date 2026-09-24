@@ -1,0 +1,96 @@
+[
+  {
+    "id": "rl_rules_09_bb_a",
+    "name": "rl-rules-09 A",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/confirmation-rules/09-building-blocks/rule.ir.json"
+    },
+    "detection": {
+      "rule_id": "rl_rules_09_bb_a",
+      "name": "rl-rules-09 A",
+      "notes": "Confirmation case 09: Rosettalog's reading of the rule built in the QRadar UI (see README.md).",
+      "condition": {
+        "kind": "field",
+        "field": "UserName",
+        "op": "equals",
+        "values": [
+          "x"
+        ],
+        "path": "test[1]"
+      },
+      "building_block": true
+    }
+  },
+  {
+    "id": "rl_rules_09_bb_b",
+    "name": "rl-rules-09 B",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/confirmation-rules/09-building-blocks/rule.ir.json"
+    },
+    "detection": {
+      "rule_id": "rl_rules_09_bb_b",
+      "name": "rl-rules-09 B",
+      "notes": "Confirmation case 09: Rosettalog's reading of the rule built in the QRadar UI (see README.md).",
+      "condition": {
+        "kind": "field",
+        "field": "DestinationPort",
+        "op": "equals",
+        "values": [
+          "443"
+        ],
+        "path": "test[1]"
+      },
+      "building_block": true
+    }
+  },
+  {
+    "id": "rl_rules_09_any",
+    "name": "rl-rules-09 any",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/confirmation-rules/09-building-blocks/rule.ir.json"
+    },
+    "detection": {
+      "rule_id": "rl_rules_09_any",
+      "name": "rl-rules-09 any",
+      "notes": "Confirmation case 09: Rosettalog's reading of the rule built in the QRadar UI (see README.md).",
+      "condition": {
+        "kind": "rule_ref",
+        "rules": [
+          "rl-rules-09 A",
+          "rl-rules-09 B"
+        ],
+        "mode": "any",
+        "path": "test[1]"
+      }
+    }
+  },
+  {
+    "id": "rl_rules_09_all",
+    "name": "rl-rules-09 all",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/confirmation-rules/09-building-blocks/rule.ir.json"
+    },
+    "detection": {
+      "rule_id": "rl_rules_09_all",
+      "name": "rl-rules-09 all",
+      "notes": "Confirmation case 09: Rosettalog's reading of the rule built in the QRadar UI (see README.md).",
+      "condition": {
+        "kind": "rule_ref",
+        "rules": [
+          "rl-rules-09 A",
+          "rl-rules-09 B"
+        ],
+        "mode": "all",
+        "path": "test[1]"
+      }
+    }
+  }
+]

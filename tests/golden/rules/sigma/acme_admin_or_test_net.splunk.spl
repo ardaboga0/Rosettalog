@@ -1,0 +1,1 @@
+username IN ("admin", "root") OR src_ip IN ("192.0.2.60", "192.0.2.61")
