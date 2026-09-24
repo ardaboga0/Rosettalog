@@ -1,0 +1,51 @@
+title: 'Acme FW: config change and admin login by one user within 10 minutes (any order) (step 1)'
+id: bd524a6f-1212-5482-a2a1-8c1c1f064bbf
+name: acme_config_and_login_step1
+status: experimental
+description: Events for the correlation rule 'acme_config_and_login' (same file).
+logsource:
+  product: qradar
+detection:
+  sel_1:
+    EventName:
+    - cfg_change
+    - login_ok
+  sel_2:
+    EventName: cfg_change
+  condition: sel_1 and sel_2
+---
+title: 'Acme FW: config change and admin login by one user within 10 minutes (any order) (step 2)'
+id: 4ac394ed-4bbd-526d-b88f-3ecc6c6b141d
+name: acme_config_and_login_step2
+status: experimental
+description: Events for the correlation rule 'acme_config_and_login' (same file).
+logsource:
+  product: qradar
+detection:
+  sel_1:
+    EventName:
+    - cfg_change
+    - login_ok
+  sel_2:
+    EventName: login_ok
+  condition: sel_1 and sel_2
+---
+title: 'Acme FW: config change and admin login by one user within 10 minutes (any order)'
+id: 0013c03d-e653-5435-970b-e05573668925
+name: acme_config_and_login
+status: experimental
+correlation:
+  type: temporal
+  rules:
+  - acme_config_and_login_step1
+  - acme_config_and_login_step2
+  group-by:
+  - username
+  timespan: 10m
+level: medium
+qradar:
+  rule_id: '100204'
+  enabled: true
+  building_block: false
+  rule_type: event
+  severity: 4

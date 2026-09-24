@@ -21,6 +21,10 @@ while IFS= read -r line || [ -n "$line" ]; do
       continue
       ;;
   esac
+  # The syslog header time in sample.log is a placeholder: send the current time instead, so
+  # that the pauses above are also visible in the events' own timestamps.
+  now=$(LC_ALL=C date '+%b %e %H:%M:%S')
+  line=$(printf '%s' "$line" | sed "s/^<13>Mar 24 10:00:00 /<13>$now /")
   printf '%s\n' "$line" | nc -u -w1 "$host" "$port"
   echo "sent: $line"
   sleep 1

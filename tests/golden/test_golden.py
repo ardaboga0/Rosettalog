@@ -32,7 +32,10 @@ def test_golden(case: str, target: str, update_golden: bool) -> None:
         assert f.content == golden.read_text(encoding="utf-8"), f"{golden} differs"
 
 
-RULES = EXAMPLES / "rules" / "acme_rules.ir.json"
+RULES = [
+    EXAMPLES / "rules" / "acme_rules.ir.json",
+    EXAMPLES / "rules-stateful" / "stateful_rules.ir.json",
+]
 
 
 def check_golden(path: Path, content: str, update_golden: bool) -> None:
@@ -49,8 +52,8 @@ def test_golden_sigma(queries: bool, update_golden: bool) -> None:
     options = {}
     if queries:
         pytest.importorskip("sigma.backends.splunk")
-        options = {"pysigma_targets": "splunk,kusto,lucene,esql"}
-    for artifact in load_artifacts([RULES]):
+        options = {"pysigma_targets": "splunk,kusto,lucene,esql,eql"}
+    for artifact in load_artifacts(RULES):
         result = get_backend("sigma").generate(artifact, options)
         for f in result.files:
             if queries != f.path.endswith(".yml"):

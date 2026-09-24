@@ -124,6 +124,12 @@ For every event up to four answers are compared:
 - Sigma rule or query ≠ source → `VERIFY_RULE_TARGET_MISMATCH`. Extra matches are expected when
   tests were dropped (`SIGMA_TEST_DROPPED`); a missed event is a bug unless a finding explains
   it.
+- **Counters and sequences** are compared by the **groups they alert on**
+  (`SourceIp=192.0.2.20`, or `(all)` without group-by), because that is what the engines'
+  aggregation queries return. Rule samples give each event a `time`. The window semantics
+  (sliding window, per-combination grouping, gaps allowed in sequences, window from first to
+  last step) are in `verify/emulators/windows.py` and follow R04-R08. How *often* a rule fires
+  (R06) is not compared.
 - Query on a real engine ≠ the Sigma rule → `VERIFY_RULE_DOWNSTREAM_GAP`: pySigma or the engine
   does not implement the Sigma semantics. Known cases are listed in the
   [rules support matrix](rules-support-matrix.md#known-downstream-gaps-observed).
@@ -134,13 +140,17 @@ How the engines see the events (the only environment choices Rosettalog makes):
   pySigma pipeline.
 - A field whose sample values are all integers is numeric (like ports in a real schema);
   everything else is a string.
-- **Splunk:** JSON lines, pretrained sourcetype `_json`, searched as
-  `search index=rl_verify source=<unique> <query>`.
+- **Splunk:** JSON lines with sourcetype `rl_rules_json` (index-time JSON fields, `_time` from
+  the sample time; installed once per session, which costs one restart). They go into a fresh
+  index that becomes the admin role's only default search index, so pySigma's query runs
+  **unmodified** (`| multisearch` must be the first command), prefixed only by `search`.
 - **Kusto:** a `datatable` (string, or `long` for numeric fields; a missing string is empty, as
   in a Log Analytics table) piped into `where <query>`.
 - **Elasticsearch:** a temporary index with every string field mapped as `keyword` (the common
-  ECS convention). Lucene queries run as `query_string`. ES|QL queries run unchanged except that
-  pySigma's `from *` is pointed at that index. The index is always deleted.
+  ECS convention) and the sample time as `@timestamp`. Lucene queries run as `query_string`.
+  ES|QL queries run unchanged except that pySigma's `from *` is pointed at that index. EQL runs
+  through `_eql/search`, with the event category field set to the event id: EQL requires a
+  category field, and `any where` does not look at it. The index is always deleted.
 
 ```sh
 rosettalog verify examples/rules/acme_rules.ir.json -s examples/rules/samples.yaml --to sigma \

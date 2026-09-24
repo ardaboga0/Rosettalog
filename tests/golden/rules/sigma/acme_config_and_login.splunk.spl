@@ -1,0 +1,8 @@
+| multisearch
+[ search EventName IN ("cfg_change", "login_ok") EventName="cfg_change" | eval event_type="acme_config_and_login_step1" ]
+[ search EventName IN ("cfg_change", "login_ok") EventName="login_ok" | eval event_type="acme_config_and_login_step2" ]
+
+| bin _time span=10m
+| stats dc(event_type) as event_type_count by _time username
+
+| search event_type_count >= 2

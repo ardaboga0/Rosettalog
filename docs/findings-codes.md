@@ -141,7 +141,11 @@ refuted) when the report is built, and the text ends with `[Assumption <id>: <st
 |---|---|---|
 | `SIGMA_TEST_DROPPED` | PARTIAL | The finding names the test (its path in the rule). A source test Sigma cannot express (rule/building-block reference, reference data, an untranslatable regex, a test the frontend did not understand) was left out. It is only left out where that makes the rule **broader** (never where it would miss events), so the Sigma rule may match more events than the source rule. |
 | `SIGMA_EXCLUSION_DROPPED` | PARTIAL | The dropped test was an exclusion (under NOT): every event it excluded now matches, so the rule may alert far more often than the original. Always comes with `SIGMA_TEST_DROPPED`. |
-| `SIGMA_CASE_BROADENED` | PARTIAL/FULL | A case-sensitive equals/contains test is written without `cased`, because every pinned pySigma backend refuses it (G0), so it also matches other letter cases. Linked to rule assumption R01 (FULL if QRadar turns out to be case-insensitive). Under NOT this would narrow the rule, so there the test is dropped instead (`SIGMA_TEST_DROPPED`). |
+| `SIGMA_CASE_BROADENED` | PARTIAL/FULL | A case-sensitive equals/contains test is written without `cased`, because the pinned Splunk, Kusto, Lucene and ES|QL pySigma backends refuse it (G0), so it also matches other letter cases. Linked to rule assumption R01 (FULL if QRadar turns out to be case-insensitive). Under NOT this would narrow the rule, so there the test is dropped instead (`SIGMA_TEST_DROPPED`). |
+| `SIGMA_COUNTER_WINDOW` | PARTIAL/FULL | A counter became an `event_count`/`value_count` correlation, whose window is sliding. Linked to R04: FULL if QRadar counters are sliding too; PARTIAL (broader) if they use fixed windows. |
+| `SIGMA_COUNTER_GROUPING` | PARTIAL/FULL/UNSUPPORTED | A counter groups by several properties; Sigma `group-by` counts per combination. Linked to R05. |
+| `SIGMA_SEQUENCE_GAPS` | PARTIAL/FULL | A sequence became a `temporal(_ordered)` correlation, which lets other events occur between the steps. Linked to R07: PARTIAL (broader) if QRadar does not allow that. |
+| `SIGMA_SEQUENCE_WINDOW` | PARTIAL/FULL/UNSUPPORTED | In the correlation, all steps must fall within the timespan (first to last). Linked to R08: UNSUPPORTED if QRadar measures its window differently, because the Sigma rule would then miss sequences. |
 | `SIGMA_CONDITION_EMPTY` | UNSUPPORTED | Nothing of the rule's condition could be expressed, so no rule was written (it would match every event). |
 | `SIGMA_REGEX_UNSUPPORTED` | UNSUPPORTED | The regex needs a construct outside the Sigma `re` subset (lookaround, backreferences, `\b`, possessive/atomic, scoped or mid-pattern flags, Unicode properties). The test is handled as in `SIGMA_TEST_DROPPED`. |
 | `SIGMA_REGEX_END_ANCHOR` | PARTIAL | Java `\z` (absolute end) became `$`, which also matches before a final line break. |
@@ -168,6 +172,7 @@ its version; a gap is a limitation of the downstream tool.
 | Code | Status | Meaning |
 |---|---|---|
 | `PYSIGMA_CONVERTED` | FULL | The rule was converted by the named pySigma backend without a processing pipeline, so field names are the Sigma rule's. |
+| `PYSIGMA_CORRELATION_FIXED_WINDOW` | PARTIAL | The named backend converts a correlation into fixed time buckets (Splunk `bin _time span=`, ES\|QL `date_trunc`), not Sigma's sliding window, so it can miss events that fall into two neighbouring buckets (G3). |
 | `PYSIGMA_BACKEND_GAP` | UNSUPPORTED | The pySigma backend refused the rule (e.g. "Case-sensitive string matching is not supported by backend") or returned nothing. |
 
 ## Verification

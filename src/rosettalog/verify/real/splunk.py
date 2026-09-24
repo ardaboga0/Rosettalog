@@ -52,6 +52,19 @@ APP = "rosettalog_verify"
 APP_DIR = f"/opt/splunk/etc/apps/{APP}"
 LOCAL_META = "[]\naccess = read : [ * ], write : [ admin ]\nexport = system\n"
 SERVER_CERT = "/opt/splunk/etc/auth/server.pem"
+RULES_APP = "rosettalog_rules"
+RULES_APP_DIR = f"/opt/splunk/etc/apps/{RULES_APP}"
+RULES_SOURCETYPE = "rl_rules_json"
+#: Rule samples: JSON lines with index-time fields and the sample time as _time.
+RULES_PROPS = f"""[{RULES_SOURCETYPE}]
+INDEXED_EXTRACTIONS = json
+KV_MODE = none
+SHOULD_LINEMERGE = false
+TIMESTAMP_FIELDS = rl_time
+TIME_FORMAT = %Y-%m-%dT%H:%M:%SZ
+TZ = UTC
+MAX_DAYS_AGO = 10951
+"""
 
 
 def pinned_tls(cert_pem: str) -> ssl.SSLContext:
@@ -140,13 +153,39 @@ class SplunkSession:
             self.box.exec("chown", "-R", "splunk:splunk", APP_DIR, user="root")
         self.restart()
 
+    def _ensure_rule_sourcetype(self) -> None:
+        """Install the JSON sourcetype for rule samples once per session (needs one restart)."""
+        if getattr(self, "_rule_sourcetype_ready", False):
+            return
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / RULES_APP
+            (root / "local").mkdir(parents=True)
+            (root / "metadata").mkdir()
+            (root / "local" / "props.conf").write_text(RULES_PROPS, encoding="utf-8")
+            (root / "metadata" / "local.meta").write_text(LOCAL_META, encoding="utf-8")
+            self.box.exec("rm", "-rf", RULES_APP_DIR, user="root")
+            self.box.copy_in(str(root), "/opt/splunk/etc/apps/")
+            self.box.exec("chown", "-R", "splunk:splunk", RULES_APP_DIR, user="root")
+        self.restart()
+        self._rule_sourcetype_ready = True
+
     def run_detection(
         self, query: TargetQuery, content: str, events: Sequence[Mapping[str, str | int]]
     ) -> set[str]:
-        """Ingest ``events`` as JSON (pretrained sourcetype ``_json``, index-time JSON field
-        extraction) from a unique source and run ``search index=... source=... <query>``."""
+        """Run a pySigma query **unmodified** over ``events``.
+
+        The events are ingested as JSON lines (sourcetype ``rl_rules_json``: index-time JSON
+        fields, ``_time`` from the sample time) into a fresh index, which is made the admin
+        role's only default search index. pySigma queries carry no index (and ``| multisearch``
+        must come first), so they run exactly as generated, prefixed only by ``search`` when they
+        do not start with a command.
+        """
         if query.language != "splunk":
             raise RealEngineError(f"Splunk cannot run {query.language} queries")
+        self._ensure_rule_sourcetype()
+        index = f"rl_r_{secrets.token_hex(5)}"
+        self.rest("POST", "/services/data/indexes", {"name": index})
+        self.rest("POST", "/services/authorization/roles/admin", {"srchIndexesDefault": index})
         source = f"/tmp/rosettalog-{secrets.token_hex(6)}.json"
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as fh:
             fh.write("\n".join(json.dumps(dict(e)) for e in events) + "\n")
@@ -159,10 +198,9 @@ class SplunkSession:
         self.rest(
             "POST",
             "/services/data/inputs/oneshot",
-            {"name": source, "sourcetype": "_json", "index": INDEX, "host": "rosettalog"},
+            {"name": source, "sourcetype": RULES_SOURCETYPE, "index": index, "host": "rosettalog"},
         )
         window = {"earliest_time": "1", "latest_time": str(int(time.time()) + 366 * 86400)}
-        base = f'search index={INDEX} source="{source}"'
 
         def export(search: str) -> list[dict[str, Any]]:
             out = self.rest("POST", "/services/search/jobs/export", {"search": search, **window})
@@ -173,13 +211,21 @@ class SplunkSession:
             ]
 
         wait_until(
-            lambda: len(export(f"{base} | stats count by {EVENT_ID_FIELD}")) >= len(events),
+            lambda: (
+                len(export(f"search index={index} | stats count by {EVENT_ID_FIELD}"))
+                >= len(events)
+            ),
             timeout=300,
             what="sample events to be searchable",
             interval=3,
         )
-        rows = export(f"{base} {content.strip()}\n| table {EVENT_ID_FIELD}")
-        return {str(r[EVENT_ID_FIELD]) for r in rows if r.get(EVENT_ID_FIELD)}
+        text = content.strip()
+        search = text if text.startswith("|") else f"search {text}"
+        if query.group_by is None:
+            rows = export(f"{search}\n| table {EVENT_ID_FIELD}")
+            return {str(r[EVENT_ID_FIELD]) for r in rows if r.get(EVENT_ID_FIELD)}
+        rows = export(search)
+        return {_group_key(query.group_by, r) for r in rows}
 
     def extract_batch(
         self, result: BackendResult, logs: Sequence[str], *, now: datetime
@@ -248,6 +294,12 @@ class SplunkSession:
                 _ = canonical
             out.append(values)
         return out
+
+
+def _group_key(group_by: Sequence[str], row: Mapping[str, Any]) -> str:
+    if not group_by:
+        return "(all)"
+    return ",".join(f"{f}={row.get(f)}" for f in group_by)
 
 
 def time_value(row: dict[str, Any], log: str, timestamp: Any, now: datetime) -> RealValue:

@@ -1,0 +1,1 @@
+any where LogSourceType:"Acme Firewall" and (src_ip like~ ("192.0.2.10", "192.0.2.11")) and username:"*adm*"

@@ -51,6 +51,20 @@ TARGETS: dict[str, PySigmaTarget] = {
         "esql",
         "elastic",
     ),
+    "eql": PySigmaTarget(
+        "sigma.backends.elasticsearch.elasticsearch_eql",
+        "EqlBackend",
+        "pysigma-backend-elasticsearch",
+        "eql",
+        "elastic",
+    ),
+}
+
+#: Correlation rules converted into fixed time buckets instead of Sigma's sliding window, read
+#: from the pinned backend sources (pinned in tests/unit/test_pysigma_gaps.py; gap G3).
+FIXED_WINDOW_CORRELATIONS = {
+    "splunk": "`| bin _time span=<timespan>` + `stats ... by _time`",
+    "esql": "`date_trunc(<timespan>, @timestamp)` + `stats ... by timebucket`",
 }
 
 
@@ -83,8 +97,8 @@ class CheckResult:
     queries: list[TargetQuery] = field(default_factory=list)
 
 
-def _finding(status: Status, code: str, message: str, **kw: Any) -> Finding:
-    return Finding(status=status, code=code, path="", message=message, target=NAME, **kw)
+def _finding(status: Status, code: str, message: str, path: str = "", **kw: Any) -> Finding:
+    return Finding(status=status, code=code, path=path, message=message, target=NAME, **kw)
 
 
 def load_collection(text: str) -> Any:
@@ -93,7 +107,9 @@ def load_collection(text: str) -> Any:
     return SigmaCollection.from_yaml(text)
 
 
-def check_and_convert(text: str, targets: str, artifact_id: str) -> CheckResult:
+def check_and_convert(
+    text: str, targets: str, artifact_id: str, *, group_by: list[str] | None = None
+) -> CheckResult:
     """Validate ``text`` with every pySigma validator and convert it for ``targets``."""
     out = CheckResult()
     names = parse_targets(targets)
@@ -128,6 +144,7 @@ def check_and_convert(text: str, targets: str, artifact_id: str) -> CheckResult:
                     path=converted.path,
                     runner_target=TARGETS[name].runner_target,
                     label=target_label(name),
+                    group_by=group_by,
                 )
             )
     return out
@@ -152,6 +169,12 @@ def _validate(collection: Any) -> list[Finding]:
     return findings
 
 
+def _has_correlation(collection: Any) -> bool:
+    from sigma.correlations import SigmaCorrelationRule
+
+    return any(isinstance(rule, SigmaCorrelationRule) for rule in collection)
+
+
 def _convert(
     collection: Any, name: str, artifact_id: str, findings: list[Finding]
 ) -> GeneratedFile | None:
@@ -172,6 +195,7 @@ def _convert(
                 Status.UNSUPPORTED,
                 "PYSIGMA_BACKEND_GAP",
                 f"{label} could not convert the rule: {exc}",
+                path=f"pysigma[{name}]",
                 suggestion="This is a limitation of the pySigma backend; translate this rule "
                 "for that target by hand or report it upstream.",
             )
@@ -179,16 +203,36 @@ def _convert(
         return None
     if not queries:
         findings.append(
-            _finding(Status.UNSUPPORTED, "PYSIGMA_BACKEND_GAP", f"{label} returned no query.")
+            _finding(
+                Status.UNSUPPORTED,
+                "PYSIGMA_BACKEND_GAP",
+                f"{label} returned no query.",
+                path=f"pysigma[{name}]",
+            )
         )
         return None
     content = "\n\n".join(str(q) for q in queries) + "\n"
+    if name in FIXED_WINDOW_CORRELATIONS and _has_correlation(collection):
+        findings.append(
+            _finding(
+                Status.PARTIAL,
+                "PYSIGMA_CORRELATION_FIXED_WINDOW",
+                f"{label} converts the correlation with {FIXED_WINDOW_CORRELATIONS[name]}: "
+                "fixed time buckets, not the sliding window Sigma specifies. Events that fall "
+                "into two neighbouring buckets are not counted together, so the query can miss "
+                "what the Sigma rule detects.",
+                path=f"pysigma[{name}]",
+                suggestion="Rewrite the query with a sliding window on the target (e.g. Splunk "
+                "streamstats time_window=) or accept the gap.",
+            )
+        )
     findings.append(
         _finding(
             Status.FULL,
             "PYSIGMA_CONVERTED",
             f"Converted by {label} without a processing pipeline: field names are the Sigma "
             "rule's field names.",
+            path=f"pysigma[{name}]",
             suggestion="Add the pySigma pipeline for your data model (e.g. sentinel_asim, "
             "splunk_cim, ecs) when converting for production.",
         )

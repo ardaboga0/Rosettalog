@@ -1,0 +1,6 @@
+EventName="conn_denied"
+
+| bin _time span=1m
+| stats dc(dst_port) as value_count by _time src_ip
+
+| search value_count >= 3

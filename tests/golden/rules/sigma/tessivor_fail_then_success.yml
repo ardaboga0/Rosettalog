@@ -1,0 +1,52 @@
+title: 'Tessivor VPN: failed then successful login, same source and user, within 2 minutes (step 1)'
+id: 16811941-6be9-5449-87c0-00f648597ee2
+name: tessivor_fail_then_success_step1
+status: experimental
+description: Events for the correlation rule 'tessivor_fail_then_success' (same file).
+logsource:
+  product: qradar
+detection:
+  sel_1:
+    EventName:
+    - login_fail
+    - login_ok
+  sel_2:
+    EventName: login_fail
+  condition: sel_1 and sel_2
+---
+title: 'Tessivor VPN: failed then successful login, same source and user, within 2 minutes (step 2)'
+id: 68835e3e-4203-58c5-8666-48837dc46367
+name: tessivor_fail_then_success_step2
+status: experimental
+description: Events for the correlation rule 'tessivor_fail_then_success' (same file).
+logsource:
+  product: qradar
+detection:
+  sel_1:
+    EventName:
+    - login_fail
+    - login_ok
+  sel_2:
+    EventName: login_ok
+  condition: sel_1 and sel_2
+---
+title: 'Tessivor VPN: failed then successful login, same source and user, within 2 minutes'
+id: d237e0e8-6001-5aed-b08d-66d66785e76c
+name: tessivor_fail_then_success
+status: experimental
+correlation:
+  type: temporal_ordered
+  rules:
+  - tessivor_fail_then_success_step1
+  - tessivor_fail_then_success_step2
+  group-by:
+  - src_ip
+  - username
+  timespan: 2m
+level: medium
+qradar:
+  rule_id: '100203'
+  enabled: true
+  building_block: false
+  rule_type: event
+  severity: 6

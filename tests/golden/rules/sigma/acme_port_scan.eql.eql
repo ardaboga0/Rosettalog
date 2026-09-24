@@ -1,0 +1,2 @@
+sequence by src_ip with maxspan=1m 
+ [any where EventName:"conn_denied"] by dst_port with runs=3

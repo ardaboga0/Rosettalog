@@ -1,0 +1,2 @@
+sequence by src_ip with maxspan=5m 
+ [any where EventName:"auth_fail"]  with runs=3

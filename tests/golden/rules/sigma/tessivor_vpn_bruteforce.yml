@@ -1,0 +1,32 @@
+title: 'Tessivor VPN: at least 3 failed logins from one source in 5 minutes (counted events)'
+id: 1048dae5-922f-533e-b76f-1735e8d551dd
+name: tessivor_vpn_bruteforce_events
+status: experimental
+description: Events for the correlation rule 'tessivor_vpn_bruteforce' (same file).
+logsource:
+  product: qradar
+detection:
+  sel_1:
+    EventName: auth_fail
+  condition: sel_1
+---
+title: 'Tessivor VPN: at least 3 failed logins from one source in 5 minutes'
+id: 003049c1-6405-5716-8ff8-5059ba225463
+name: tessivor_vpn_bruteforce
+status: experimental
+correlation:
+  type: event_count
+  rules:
+  - tessivor_vpn_bruteforce_events
+  group-by:
+  - src_ip
+  timespan: 5m
+  condition:
+    gte: 3
+level: high
+qradar:
+  rule_id: '100201'
+  enabled: true
+  building_block: false
+  rule_type: event
+  severity: 7

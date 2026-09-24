@@ -1,0 +1,3 @@
+sequence by src_ip, username with maxspan=2m 
+ [any where (EventName like~ ("login_fail", "login_ok")) and EventName:"login_fail"] 
+ [any where (EventName like~ ("login_fail", "login_ok")) and EventName:"login_ok"] by  with runs=2

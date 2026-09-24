@@ -1,0 +1,3 @@
+from * metadata _id, _index, _version | where EventName=="conn_denied"
+| eval timebucket=date_trunc(1minutes, @timestamp) | stats value_count=count_distinct(dst_port) by timebucket, src_ip
+| where value_count >= 3

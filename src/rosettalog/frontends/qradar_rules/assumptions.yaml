@@ -42,3 +42,59 @@ assumptions:
       match).
     scope: global
     topic: rule-missing-property
+
+  - id: R04
+    case: 04-counter-window
+    question: Is the "in N minutes" window of a counter test sliding, or fixed time buckets?
+    assumption: >-
+      Sliding: the rule fires when the threshold is reached within any N-minute interval (Sigma
+      correlation windows are sliding as well).
+    alternatives: >-
+      Fixed buckets (e.g. clock minutes): e1-e3 fall into two buckets when sending starts at
+      about hh:mm:40, so the rule does not fire.
+    scope: per-artifact
+    findings: [SIGMA_COUNTER_WINDOW]
+    topic: rule-counter-window
+
+  - id: R05
+    case: 05-counter-grouping
+    question: With "the same Source IP and Username", are events counted per combination of both properties?
+    assumption: Per combination (like Sigma group-by with several fields).
+    alternatives: >-
+      Per Source IP only, or per property separately: the rule then also fires for
+      192.0.2.10 as a whole (already at e2), not only for 192.0.2.10 with user a (at e4).
+    scope: per-artifact
+    findings: [SIGMA_COUNTER_GROUPING]
+    topic: rule-counter-grouping
+
+  - id: R06
+    case: 06-counter-firing
+    question: Once a counter's threshold is reached, does the rule fire once, or again for every further event in the window?
+    assumption: >-
+      Once per group and window, at the event that reaches the threshold (e2). Verification
+      compares which groups alert, not how often, so this only affects the number of alerts.
+    alternatives: The rule fires for e2, e3 and e4 (one alert or offense contribution each).
+    scope: global
+    topic: rule-counter-firing
+
+  - id: R07
+    case: 07-sequence-gaps
+    question: In a sequence ("in the order"), may other events occur between the steps?
+    assumption: Yes. Only the order of the step events matters (Sigma temporal_ordered).
+    alternatives: No. An event in between (e2) breaks the sequence, so 192.0.2.10 does not fire.
+    scope: per-artifact
+    findings: [SIGMA_SEQUENCE_GAPS]
+    topic: rule-sequence-gaps
+
+  - id: R08
+    case: 08-sequence-window
+    question: Is a sequence's "within N minutes" measured from the first to the last step?
+    assumption: >-
+      Yes. All steps must fall within N minutes of the first one (Sigma: all events inside the
+      timespan).
+    alternatives: >-
+      Measured between consecutive steps: 192.0.2.10 (40 s between steps, 80 s in total) fires
+      too.
+    scope: per-artifact
+    findings: [SIGMA_SEQUENCE_WINDOW]
+    topic: rule-sequence-window

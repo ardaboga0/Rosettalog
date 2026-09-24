@@ -1,0 +1,34 @@
+[
+  {
+    "id": "rl_rules_04_counter",
+    "name": "rl-rules-04 counter",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/confirmation-rules/04-counter-window/rule.ir.json"
+    },
+    "detection": {
+      "rule_id": "rl_rules_04_counter",
+      "name": "rl-rules-04 counter",
+      "notes": "Confirmation case 04: Rosettalog's reading of the rule built in the QRadar UI (see README.md).",
+      "condition": {
+        "kind": "field",
+        "field": "UserName",
+        "op": "equals",
+        "values": [
+          "w"
+        ],
+        "path": "test[1]"
+      },
+      "stateful": {
+        "kind": "counter",
+        "count": 3,
+        "window_s": 60,
+        "group_by": [
+          "SourceIp"
+        ],
+        "path": "test[2]"
+      }
+    }
+  }
+]

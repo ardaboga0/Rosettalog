@@ -20,7 +20,7 @@ construct or changes its meaning, that is reported as a gap in the downstream to
 |---|---|---|
 | Field equals one of values | `field: [values]`, wildcards escaped; integers written as numbers | FULL |
 | Field contains | `field\|contains` | FULL |
-| Case-sensitive equals/contains (values with letters) | written **without** `\|cased` (every pinned pySigma backend refuses it, G0): broader. Under NOT that would narrow the rule, so the test is dropped there instead | PARTIAL (`SIGMA_CASE_BROADENED`, linked to R01; or `SIGMA_TEST_DROPPED` + `SIGMA_EXCLUSION_DROPPED`) |
+| Case-sensitive equals/contains (values with letters) | written **without** `\|cased` (the Splunk, Kusto, Lucene and ES\|QL backends refuse it, G0): broader. Under NOT that would narrow the rule, so the test is dropped there instead | PARTIAL (`SIGMA_CASE_BROADENED`, linked to R01; or `SIGMA_TEST_DROPPED` + `SIGMA_EXCLUSION_DROPPED`) |
 | Field matches regex (Java) | `field\|re` in the Sigma regex subset (below), flags as `\|i \|m \|s` | FULL, PARTIAL or UNSUPPORTED per construct |
 | AND / OR / NOT | one search identifier per test; the condition keeps the source's structure | FULL |
 | Log source / log source type | the Sigma `logsource`, **only** from a `sigma.logsource_map` you provide; otherwise kept as a test on `LogSource`/`LogSourceType` | FULL (mapped) / PARTIAL |
@@ -28,7 +28,10 @@ construct or changes its meaning, that is reported as a gap in the downstream to
 | Rule / building-block reference | not yet translated (M3c); dropped, broadening the rule | PARTIAL (`SIGMA_TEST_DROPPED`) |
 | Reference set/map test | not translated (M3c: named, with the target mechanism); dropped, broadening the rule | PARTIAL (`SIGMA_TEST_DROPPED`) |
 | Test not understood by the frontend | dropped, broadening the rule | PARTIAL (`SIGMA_TEST_DROPPED`) |
-| Counters / sequences | M3b (Sigma correlation rules) | not yet |
+| Counter: at least N events, same X, within T | a base rule (`<id>_events`) plus an `event_count` correlation (`group-by`, `timespan`, `condition: {gte: N}`), in one multi-document `.yml` | PARTIAL until R04 (sliding window) and, for several fields, R05 (per-combination grouping) are confirmed (`SIGMA_COUNTER_WINDOW`, `SIGMA_COUNTER_GROUPING`) |
+| Counter: at least N different values of F | `value_count` correlation with `condition.field` | as above |
+| Sequence: steps in order within T | one base rule per step (`<id>_stepN`, the rule's condition AND the step) plus a `temporal_ordered` correlation | PARTIAL until R07 (gaps allowed) and R08 (window from first to last step) are confirmed (`SIGMA_SEQUENCE_GAPS`, `SIGMA_SEQUENCE_WINDOW`) |
+| Sequence: steps in any order within T | `temporal` correlation | as above |
 
 **Dropping a test only ever broadens a rule.** A test Sigma cannot express counts as *true*
 where it counts positively and as *false* under a negation. The Sigma rule may therefore raise
@@ -111,6 +114,11 @@ encoding) are not assumptions: the rule-export parser waits for them.
 | R01 | Are event-property "equals" and "contains" tests case-sensitive? | Yes, unless the test is marked case-insensitive. Sigma output is written case-insensitively anyway (pySigma backends refuse 'cased'), which makes such rules broader. | per artifact: `SIGMA_CASE_BROADENED` | [01](../examples/confirmation-rules/01-value-case) | unconfirmed |
 | R02 | Does a "matches regex" test match anywhere in the value, or must it match the whole value? | Anywhere in the value (java.util.regex find semantics), like LSX patterns. | global: listed in every report while not confirmed | [02](../examples/confirmation-rules/02-regex-find) | unconfirmed |
 | R03 | How does a test on a property the event does not have evaluate, and its negation? | The test is false, so its negation is true: an event without a username matches "NOT username equals bob". | global: listed in every report while not confirmed | [03](../examples/confirmation-rules/03-missing-property) | unconfirmed |
+| R04 | Is the "in N minutes" window of a counter test sliding, or fixed time buckets? | Sliding: the rule fires when the threshold is reached within any N-minute interval (Sigma correlation windows are sliding as well). | per artifact: `SIGMA_COUNTER_WINDOW` | [04](../examples/confirmation-rules/04-counter-window) | unconfirmed |
+| R05 | With "the same Source IP and Username", are events counted per combination of both properties? | Per combination (like Sigma group-by with several fields). | per artifact: `SIGMA_COUNTER_GROUPING` | [05](../examples/confirmation-rules/05-counter-grouping) | unconfirmed |
+| R06 | Once a counter's threshold is reached, does the rule fire once, or again for every further event in the window? | Once per group and window, at the event that reaches the threshold (e2). Verification compares which groups alert, not how often, so this only affects the number of alerts. | global: listed in every report while not confirmed | [06](../examples/confirmation-rules/06-counter-firing) | unconfirmed |
+| R07 | In a sequence ("in the order"), may other events occur between the steps? | Yes. Only the order of the step events matters (Sigma temporal_ordered). | per artifact: `SIGMA_SEQUENCE_GAPS` | [07](../examples/confirmation-rules/07-sequence-gaps) | unconfirmed |
+| R08 | Is a sequence's "within N minutes" measured from the first to the last step? | Yes. All steps must fall within N minutes of the first one (Sigma: all events inside the timespan). | per artifact: `SIGMA_SEQUENCE_WINDOW` | [08](../examples/confirmation-rules/08-sequence-window) | unconfirmed |
 <!-- END GENERATED: rule-assumptions -->
 
 ## pySigma backends (pinned)
@@ -121,15 +129,19 @@ encoding) are not assumptions: the rule-export parser waits for them.
 `-O sigma.pysigma_targets=splunk,kusto,lucene,esql`. Conversion runs without a processing
 pipeline (`PYSIGMA_CONVERTED`); add your data model's pipeline for production.
 
-### Correlation support (read from the pinned sources; used from M3b)
+### Correlation support (pinned versions, checked on real engines)
 
 | Backend | event_count | value_count | temporal | temporal_ordered |
 |---|---|---|---|---|
-| Splunk (`stats`) | yes, `bin _time span=` (**fixed buckets**, not a sliding window) | yes, fixed buckets | yes, fixed buckets | no |
-| Kusto | no correlation support | no | no | no |
-| Elasticsearch Lucene | no | no | no | no |
-| Elasticsearch ES\|QL (`stats`) | yes, `date_trunc` (fixed buckets) | yes, fixed buckets | yes, fixed buckets | no |
-| Elasticsearch EQL | `sequence ... with runs=` | partly | `sample` | `sequence ... maxspan` |
+| Splunk 2.1.0 (`stats`) | fixed buckets, G3 | fixed buckets, G3 | `multisearch`, fixed buckets, G3 | refused |
+| Kusto 1.0.1 | refused (no correlation support) | refused | refused | refused |
+| Elasticsearch Lucene | refused | refused | refused | refused |
+| Elasticsearch ES\|QL (`stats`) | fixed buckets, G3 | fixed buckets, G3 | fixed buckets, G3 | refused |
+| Elasticsearch EQL | `sequence ... with runs=` (agreed on the examples) | **wrong**: joins on the counted field, G4 | `sample`, **no time window**, G6 | **invalid query**, G5 |
+
+"Refused" conversions are reported as `PYSIGMA_BACKEND_GAP` for that backend only; the Sigma rule
+is still produced. Fixed buckets are reported at conversion time
+(`PYSIGMA_CORRELATION_FIXED_WINDOW`).
 
 ### Known downstream gaps (observed)
 
@@ -139,9 +151,17 @@ issues, and filed issues) are tracked in [upstream/](upstream/README.md).
 
 | # | Backend | Construct | Observed | Evidence |
 |---|---|---|---|---|
-| G0 | all four (splunk 2.1.0, kusto 1.0.1, elasticsearch 2.1.1) | `\|cased` | conversion refused: "Case-sensitive string matching is not supported by backend". Rosettalog therefore does not emit `cased` (see above) | `tests/unit/test_pysigma_gaps.py` |
+| G0 | splunk 2.1.0, kusto 1.0.1, elasticsearch 2.1.1 (lucene, esql; **not** eql) | `\|cased` | conversion refused: "Case-sensitive string matching is not supported by backend". Rosettalog therefore does not emit `cased` (see above) | `tests/unit/test_pysigma_gaps.py` |
 | G1 | elasticsearch 2.1.1 (lucene, esql) | plain/`contains` values (case-insensitive in Sigma) | matched case-sensitively on keyword fields: `username\|contains: adm` misses `SysADM` | Elasticsearch 9.5.4, `examples/rules` e3 |
 | G2 | elasticsearch 2.1.1 (lucene, esql) | `\|re` with `^`/`$` | passed through unchanged, but Lucene regular expressions have no anchors and always match the whole value ([regexp syntax](https://www.elastic.co/docs/reference/query-languages/query-dsl/regexp-syntax)): `/^auth.../` matches nothing | Elasticsearch 9.5.4, `examples/rules` e4, e7 |
 
+| G3 | splunk 2.1.0, elasticsearch 2.1.1 (esql) | correlations | fixed time buckets (`bin _time span=`, `date_trunc`) instead of a sliding window: groups whose events straddle a bucket boundary are missed | Splunk 10.4.3 and Elasticsearch 9.5.4, `examples/rules-stateful` (192.0.2.21, ivan) |
+| G4 | elasticsearch 2.1.1 (eql) | `value_count` | `[...] by <field> with runs=N`: N events with the **same** value, not N distinct values | Elasticsearch 9.5.4, `examples/rules-stateful` (alerts on .31, misses .30) |
+| G5 | elasticsearch 2.1.1 (eql) | `temporal_ordered` | `... by  with runs=2`: invalid EQL, rejected with a parse error | Elasticsearch 9.5.4, `examples/rules-stateful`, cases 07/08 |
+| G6 | elasticsearch 2.1.1 (eql) | `temporal` | `sample by ...` without `maxspan`: the timespan is ignored | Elasticsearch 9.5.4, `examples/rules-stateful` (alerts on heidi, an hour apart) |
+| G7 | elasticsearch 2.1.1 (eql) | numeric values | `field:22`; Elasticsearch rejects `:` on numeric fields ("consider using [==] instead") | Elasticsearch 9.5.4, `examples/rules` (dst_port, QID) |
+| G8 | elasticsearch 2.1.1 (eql) | `\|re` | rendered with `regex~`, EQL's case-insensitive regex operator (Sigma regexes are case-sensitive); whole-value like G2 | Elasticsearch 9.5.4, case 02 (matches `ADM`, misses `sysadmin`) |
+
 Splunk 10.4.3 (local) and the Kusto emulator (`real-engines` workflow run 35982350005, x86-64)
-agreed with the Sigma rule on every example event.
+agreed with the Sigma rule on every single-event example; Splunk also on every correlation apart
+from G3. Kusto has no correlation support.

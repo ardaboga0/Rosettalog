@@ -1,0 +1,33 @@
+title: 'Acme FW: at least 3 different denied ports from one source in 1 minute (counted events)'
+id: a27f7a2d-3f4e-542b-b684-0b5ab8cd9f1f
+name: acme_port_scan_events
+status: experimental
+description: Events for the correlation rule 'acme_port_scan' (same file).
+logsource:
+  product: qradar
+detection:
+  sel_1:
+    EventName: conn_denied
+  condition: sel_1
+---
+title: 'Acme FW: at least 3 different denied ports from one source in 1 minute'
+id: 95093df8-92bd-5b76-a4f6-6a184967e018
+name: acme_port_scan
+status: experimental
+correlation:
+  type: value_count
+  rules:
+  - acme_port_scan_events
+  group-by:
+  - src_ip
+  timespan: 1m
+  condition:
+    gte: 3
+    field: dst_port
+level: medium
+qradar:
+  rule_id: '100202'
+  enabled: true
+  building_block: false
+  rule_type: event
+  severity: 5

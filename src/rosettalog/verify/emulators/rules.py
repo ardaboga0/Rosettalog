@@ -7,17 +7,20 @@ QRadar's behaviour is not documented, the evaluator follows the rule assumption 
 * A field test on a property the event does not have is false (so its negation is true).
 * ``regex`` uses Java regex *find* semantics: the pattern may match anywhere in the value.
 * ``equals``/``contains`` compare case-sensitively unless the test says otherwise.
+* Counters and sequences follow :mod:`rosettalog.verify.emulators.windows` (R04-R08).
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 import regex as pyregex
 
 from rosettalog.ir import (
     And,
     Cond,
+    Counter,
+    DetectionSpec,
     FieldTest,
     LogSourceTest,
     Not,
@@ -27,11 +30,16 @@ from rosettalog.ir import (
     ReferenceTest,
     RuleRef,
 )
+from rosettalog.ir import Sequence as SequenceTest
 from rosettalog.regex.translate import translate
+from rosettalog.verify.emulators.windows import TimedEvent, count_groups, sequence_groups
 
 #: Canonical pseudo-fields holding the log source (type) and QID of a sample event.
 LOG_SOURCE_FIELDS = {"log_source": "LogSource", "log_source_type": "LogSourceType"}
 QID = "QID"
+
+
+_Predicate = Callable[[Mapping[str, object]], bool]
 
 
 class NotEvaluable(Exception):
@@ -50,6 +58,28 @@ class RuleEvaluator:
 
     def matches(self, event: Mapping[str, str]) -> bool:
         return self._eval(self.cond, event)
+
+    def _matches_cond(self, cond: Cond) -> _Predicate:
+        return lambda fields: self._eval(cond, fields)  # type: ignore[arg-type]
+
+    def alerting_groups(self, spec: DetectionSpec, events: Sequence[TimedEvent]) -> set[str]:
+        """Group keys a counter/sequence rule alerts on (see the windows module)."""
+        matching = [e for e in events if self._eval(self.cond, e.fields)]  # type: ignore[arg-type]
+        match spec.stateful:
+            case Counter() as c:
+                return count_groups(
+                    matching,
+                    count=c.count,
+                    window_s=c.window_s,
+                    group_by=c.group_by,
+                    distinct_field=c.distinct_field,
+                )
+            case SequenceTest() as s:
+                steps = [self._matches_cond(step) for step in s.steps]
+                return sequence_groups(
+                    matching, steps, ordered=s.ordered, window_s=s.window_s, group_by=s.group_by
+                )
+        raise ValueError("not a stateful rule")
 
     def _eval(self, cond: Cond, event: Mapping[str, str]) -> bool:
         match cond:
