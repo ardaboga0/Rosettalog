@@ -38,10 +38,18 @@ qradar-lsx = "rosettalog.frontends.qradar_lsx:QRadarLsxFrontend"
 [project.entry-points."rosettalog.backends"]
 sentinel = "rosettalog.backends.sentinel:SentinelBackend"
 splunk = "rosettalog.backends.splunk:SplunkBackend"
+elastic = "rosettalog.backends.elastic:ElasticBackend"
 
 [project.entry-points."rosettalog.emulators"]
 sentinel = "rosettalog.verify.emulators.kql:KqlEmulator"
 splunk = "rosettalog.verify.emulators.splunk:SplunkEmulator"
+elastic = "rosettalog.verify.emulators.elastic:ElasticEmulator"
+
+[project.entry-points."rosettalog.runners"]
+elastic = "rosettalog.verify.real.elastic:ElasticRunner"
+splunk = "rosettalog.verify.real.splunk:SplunkRunner"
+sentinel = "rosettalog.verify.real.kusto:KustainerRunner"
+sentinel-adx = "rosettalog.verify.real.kusto:AdxRunner"
 
 [project.urls]
 Homepage = "https://github.com/ardaboga0/rosettalog"
@@ -92,3 +100,6 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+markers = [
+    "real_engine: runs generated content on a real target engine (Docker); opt-in via --real-engine",
+]

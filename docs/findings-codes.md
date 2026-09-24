@@ -62,6 +62,9 @@ A test (`tests/unit/test_docs.py`) checks that every code emitted by the source 
 | `RE2_LINEBREAK_APPROX` | PARTIAL | `\R` is emulated without atomicity. |
 | `PCRE_VARIABLE_LOOKBEHIND` | PARTIAL | A variable-length lookbehind may be rejected by the target PCRE. |
 | `EMULATION_COMPILE_ERROR` | UNSUPPORTED | The pattern cannot be compiled for local emulation. |
+| `REGEX_COMPILE_ERROR` | UNSUPPORTED | A generated pattern for an engine without a local compiler (grok) failed Rosettalog's own validity check. This indicates a translator bug; please report it. |
+| `ONIG_LOOKBEHIND_NOT_FIXED` | UNSUPPORTED | Oniguruma (grok) needs fixed-width lookbehind; Java allows bounded variable width. An invalid grok pattern would make the whole pipeline unusable, so the candidate is dropped. |
+| `ONIG_MULTILINE_ANCHORS` | PARTIAL | The pattern uses Java's MULTILINE flag. `^`/`$` are emitted as Ruby line anchors for the whole pattern, which may differ where the flag was scoped. |
 
 ## Timestamps (Joda-Time `ext-data`)
 
@@ -103,7 +106,22 @@ A test (`tests/unit/test_docs.py`) checks that every code emitted by the source 
 | `SPLUNK_TIMESTAMP_UNSUPPORTED` | UNSUPPORTED | The timestamp is not a single capture group. |
 | `SPLUNK_INDEX_TIME_DEPENDENCY` | PARTIAL | A translated field (`_time` from DeviceTime) depends on index-time settings (`TIME_PREFIX`, `TIME_FORMAT`). These take effect only on the instance that parses the data (indexer or heavy forwarder), and only for events indexed after deployment. |
 | `SPLUNK_EVENT_BREAKING_ASSUMED` | FULL | `SHOULD_LINEMERGE = false` (one event per line) is an index-time setting and only affects newly indexed data. |
+| `SPLUNK_TIMESTAMP_FALLBACK` | PARTIAL | When `TIME_FORMAT` does not match, Splunk falls back to automatic timestamp recognition or the previous event's time, where QRadar leaves DeviceTime unset. |
+| `SPLUNK_YEAR_INFERENCE` | PARTIAL | The timestamp format has no year; Splunk infers it from neighbouring events (out-of-order events can be assigned the next year and rejected by `MAX_DAYS_HENCE`). |
+| `SPLUNK_KV_MODE_NONE` | FULL | `KV_MODE = none` disables Splunk's automatic key=value extraction for the sourcetype, so only translated fields appear. |
+| `SPLUNK_APP_SCOPE` | FULL | Search-time extractions deployed inside an app only apply in that app unless its knowledge objects are exported (`export = system`). |
 | `SPLUNK_INTERMEDIATE_FIELDS` | FULL | `rl_*` helper fields are visible at search time. |
+
+## Elastic backend
+
+| Code | Status | Meaning |
+|---|---|---|
+| `ELASTIC_INGEST_TIME_DEPENDENCY` | PARTIAL | Fields come from an ingest pipeline. It only processes documents ingested through it after deployment; indexed documents keep their fields. |
+| `ELASTIC_DATE_CASE_SENSITIVE` | PARTIAL | The Elasticsearch `date` processor (java.time, STRICT) parses month/day names and AM/PM case-sensitively, but QRadar's Joda parsing is assumed case-insensitive (A10). |
+| `ELASTIC_DATE_FIXED_WIDTH` | PARTIAL | Adjacent numeric date fields without a separator must be fixed-width in java.time. |
+| `ELASTIC_TEMPLATE_LITERAL` | UNSUPPORTED | Literal text containing `{{` or `}}` would be read as a mustache template by the `set` processor. |
+| `ELASTIC_TIMESTAMP_OVERWRITE` | FULL | A parsed DeviceTime replaces any existing `@timestamp`. |
+| `ELASTIC_STRING_TYPES` | FULL | Values are strings; the index mapping decides the final types. |
 
 ## Verification
 
@@ -112,4 +130,8 @@ A test (`tests/unit/test_docs.py`) checks that every code emitted by the source 
 | `VERIFY_MISMATCH` | PARTIAL | For a field, the emulated target output differs from the emulated source, or from the expected value, on at least one sample. |
 | `VERIFY_EMULATION_ERROR` | PARTIAL | The generated content could not be emulated. |
 | `VERIFY_SOURCE_NOT_EMULATED` | PARTIAL | A source pattern could not be emulated, so its fields were not verified. |
+| `VERIFY_REAL_MISMATCH` | PARTIAL | On the real target engine (`--engine real`), a field differs from the source semantics or the expected value. |
+| `VERIFY_EMULATOR_DIVERGENCE` | PARTIAL | **Emulator bug:** the target emulator disagrees with the real engine for a field. It must be fixed and get a regression test. |
+| `VERIFY_REAL_ENGINE_ERROR` | PARTIAL | The real engine could not run the generated content (for example, it rejected it). |
+| `VERIFY_REAL_NOT_COMPARABLE` | FULL | A field was not compared with the real engine, e.g. a timestamp without a year while the samples' `reference_time` is in a different year than the engine's clock. |
 | `VERIFY_UNKNOWN_EXPECTED_FIELD` | PARTIAL | A sample lists expected values for a field the parser does not produce (probably a typo), so it was not checked. |

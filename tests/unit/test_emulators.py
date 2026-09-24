@@ -69,7 +69,7 @@ def splunk(props: str, transforms: str, fields: dict[str, str]) -> SplunkEmulato
         target="splunk",
         artifact_id="t",
         files=[
-            GeneratedFile(path="props.conf", content="[st]\n" + props),
+            GeneratedFile(path="props.conf", content="[st]\nKV_MODE = none\n" + props),
             GeneratedFile(path="transforms.conf", content=transforms),
         ],
         field_names=fields,
@@ -107,7 +107,7 @@ def test_splunk_two_digit_year_pivot() -> None:
 
 def test_splunk_rejects_unknown_settings() -> None:
     with pytest.raises(SplunkEmulationError):
-        splunk("KV_MODE = json\n", "", {})
+        splunk("MAX_TIMESTAMP_LOOKAHEAD = 30\n", "", {})
     with pytest.raises(SplunkEmulationError):
         splunk('EVAL-x = strftime(_time, "%Y")\n', "", {"x": "x"}).extract("", now=NOW)
 

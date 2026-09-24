@@ -49,7 +49,7 @@ def _convert(tmp_path: Path, source: Path) -> dict:
         app, ["convert", str(source), "--to", "splunk", "-o", str(tmp_path)]
     )
     assert result.exit_code == 0, result.output
-    return json.loads((tmp_path / "report.json").read_text())
+    return json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
 
 
 def test_report_lists_unconfirmed_global_assumptions(tmp_path: Path) -> None:
@@ -58,7 +58,7 @@ def test_report_lists_unconfirmed_global_assumptions(tmp_path: Path) -> None:
     assert listed == GLOBAL_OPEN
     assert len(listed) == 9
     assert all(a["scope"] == "global" for a in report["unconfirmed_global_assumptions"])
-    md = (tmp_path / "report.md").read_text()
+    md = (tmp_path / "report.md").read_text(encoding="utf-8")
     assert "## Unconfirmed global assumptions" in md
     for a in ASET.assumptions:
         assert (f"| {a.id} |" in md) == (a.id in GLOBAL_OPEN)
@@ -84,7 +84,7 @@ def test_confirmed_assumption_drops_out_and_refuted_stays(tmp_path: Path, monkey
     listed = {a["id"]: a["status"] for a in report["unconfirmed_global_assumptions"]}
     assert "A02" not in listed
     assert listed["A07"] == "refuted"
-    assert "REFUTED" in (tmp_path / "report.md").read_text()
+    assert "REFUTED" in (tmp_path / "report.md").read_text(encoding="utf-8")
 
 
 def test_no_assumptions_without_artifacts_of_that_format(tmp_path: Path) -> None:

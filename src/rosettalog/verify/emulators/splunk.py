@@ -17,7 +17,7 @@ from rosettalog.plugins import BackendResult
 from rosettalog.timefmt.joda import Comp, build_datetime, format_timestamp
 from rosettalog.verify.emulators.pcre import compile_pcre
 
-SUPPORTED_PROPS = {"SHOULD_LINEMERGE", "TIME_PREFIX", "TIME_FORMAT"}
+SUPPORTED_PROPS = {"SHOULD_LINEMERGE", "TIME_PREFIX", "TIME_FORMAT", "KV_MODE"}
 
 
 class SplunkEmulationError(Exception):
@@ -312,12 +312,21 @@ class SplunkEmulator:
                     t = transforms.get(name)
                     if t is None or set(t) - {"REGEX", "FORMAT"}:
                         raise SplunkEmulationError(f"transform [{name}] missing or unsupported")
+                    if re.search(r"\(\?P?<[A-Za-z]", t["REGEX"]):
+                        # Splunk extracts named groups as fields and skips FORMAT; not emulated.
+                        raise SplunkEmulationError(
+                            f"transform [{name}] uses named capture groups, which are not emulated"
+                        )
                     pairs = [tuple(p.split("::", 1)) for p in t["FORMAT"].split()]
                     self.reports.append((compile_pcre(t["REGEX"]), pairs))  # type: ignore[arg-type]
             elif key.startswith("EVAL-"):
                 self.evals.append((key[5:], _EvalParser(value).parse()))
             elif key not in SUPPORTED_PROPS:
                 raise SplunkEmulationError(f"props setting {key} is not emulated")
+        # Splunk's default KV_MODE=auto extracts every key=value pair; that is not emulated, so
+        # the generated props must disable it (found by real-engine differential testing).
+        if stanza.get("KV_MODE", "auto").lower() != "none":
+            raise SplunkEmulationError("only KV_MODE = none is emulated (auto KV is not)")
         self.timestamp: _Timestamp | None = None
         if "TIME_FORMAT" in stanza:
             rx, comps = strptime_regex(stanza["TIME_FORMAT"])

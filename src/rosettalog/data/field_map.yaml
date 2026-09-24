@@ -1,38 +1,41 @@
 # Canonical field taxonomy and default target mappings.
 #
 # Canonical names are the QRadar normalized property names (they are the de-facto vocabulary of
-# the content being migrated). Each entry maps to a Microsoft Sentinel ASIM field and a Splunk
-# CIM field. `null` means "no well-defined equivalent": the field is emitted under its original
+# the content being migrated). Each entry maps to a Microsoft Sentinel ASIM field, a Splunk
+# CIM field and an Elastic Common Schema (ECS) field
+# (https://www.elastic.co/docs/reference/ecs). ECS event.category is a controlled vocabulary, so
+# QRadar's free-text EventCategory is left unmapped.
+# `null` means "no well-defined equivalent": the field is emitted under its original
 # name and the report flags it (FIELD_UNMAPPED) so a human decides.
 #
 # These are *defaults*. They are intentionally conservative; open an issue if a mapping is wrong.
 fields:
-  EventName:            {asim: EventOriginalType,     cim: signature_id}
-  EventCategory:        {asim: EventOriginalSubType,  cim: category}
-  EventSeverity:        {asim: EventOriginalSeverity, cim: severity_id}
-  SourceIp:             {asim: SrcIpAddr,             cim: src_ip}
-  SourcePort:           {asim: SrcPortNumber,         cim: src_port}
-  SourceIpPreNAT:       {asim: null,                  cim: null}
-  SourceIpPostNAT:      {asim: SrcNatIpAddr,          cim: src_translated_ip}
-  SourceMAC:            {asim: SrcMacAddr,            cim: src_mac}
-  SourcePortPreNAT:     {asim: null,                  cim: null}
-  SourcePortPostNAT:    {asim: SrcNatPortNumber,      cim: src_translated_port}
-  DestinationIp:        {asim: DstIpAddr,             cim: dest_ip}
-  DestinationPort:      {asim: DstPortNumber,         cim: dest_port}
-  DestinationIpPreNAT:  {asim: null,                  cim: null}
-  DestinationIpPostNAT: {asim: DstNatIpAddr,          cim: dest_translated_ip}
-  DestinationPortPreNAT: {asim: null,                 cim: null}
-  DestinationPortPostNAT: {asim: DstNatPortNumber,    cim: dest_translated_port}
-  DestinationMAC:       {asim: DstMacAddr,            cim: dest_mac}
-  DeviceTime:           {asim: EventStartTime,        cim: _time}
-  Protocol:             {asim: NetworkProtocol,       cim: transport}
-  UserName:             {asim: User,                  cim: user}
-  HostName:             {asim: null,                  cim: null}
-  GroupName:            {asim: null,                  cim: null}
-  IdentityIp:           {asim: null,                  cim: null}
-  IdentityMac:          {asim: null,                  cim: null}
-  IdentityIpv6:         {asim: null,                  cim: null}
-  NetBIOSName:          {asim: null,                  cim: null}
-  ExtraIdentityData:    {asim: null,                  cim: null}
-  SourceIpv6:           {asim: SrcIpAddr,             cim: src_ip}
-  DestinationIpv6:      {asim: DstIpAddr,             cim: dest_ip}
+  EventName:            {asim: EventOriginalType,     cim: signature_id, ecs: event.code}
+  EventCategory:        {asim: EventOriginalSubType,  cim: category, ecs: null}
+  EventSeverity:        {asim: EventOriginalSeverity, cim: severity_id, ecs: event.severity}
+  SourceIp:             {asim: SrcIpAddr,             cim: src_ip, ecs: source.ip}
+  SourcePort:           {asim: SrcPortNumber,         cim: src_port, ecs: source.port}
+  SourceIpPreNAT:       {asim: null,                  cim: null, ecs: null}
+  SourceIpPostNAT:      {asim: SrcNatIpAddr,          cim: src_translated_ip, ecs: source.nat.ip}
+  SourceMAC:            {asim: SrcMacAddr,            cim: src_mac, ecs: source.mac}
+  SourcePortPreNAT:     {asim: null,                  cim: null, ecs: null}
+  SourcePortPostNAT:    {asim: SrcNatPortNumber,      cim: src_translated_port, ecs: source.nat.port}
+  DestinationIp:        {asim: DstIpAddr,             cim: dest_ip, ecs: destination.ip}
+  DestinationPort:      {asim: DstPortNumber,         cim: dest_port, ecs: destination.port}
+  DestinationIpPreNAT:  {asim: null,                  cim: null, ecs: null}
+  DestinationIpPostNAT: {asim: DstNatIpAddr,          cim: dest_translated_ip, ecs: destination.nat.ip}
+  DestinationPortPreNAT: {asim: null,                 cim: null, ecs: null}
+  DestinationPortPostNAT: {asim: DstNatPortNumber,    cim: dest_translated_port, ecs: destination.nat.port}
+  DestinationMAC:       {asim: DstMacAddr,            cim: dest_mac, ecs: destination.mac}
+  DeviceTime:           {asim: EventStartTime,        cim: _time, ecs: "@timestamp"}
+  Protocol:             {asim: NetworkProtocol,       cim: transport, ecs: network.transport}
+  UserName:             {asim: User,                  cim: user, ecs: user.name}
+  HostName:             {asim: null,                  cim: null, ecs: null}
+  GroupName:            {asim: null,                  cim: null, ecs: null}
+  IdentityIp:           {asim: null,                  cim: null, ecs: null}
+  IdentityMac:          {asim: null,                  cim: null, ecs: null}
+  IdentityIpv6:         {asim: null,                  cim: null, ecs: null}
+  NetBIOSName:          {asim: null,                  cim: null, ecs: null}
+  ExtraIdentityData:    {asim: null,                  cim: null, ecs: null}
+  SourceIpv6:           {asim: SrcIpAddr,             cim: src_ip, ecs: source.ip}
+  DestinationIpv6:      {asim: DstIpAddr,             cim: dest_ip, ecs: destination.ip}

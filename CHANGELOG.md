@@ -8,6 +8,63 @@ All notable changes to this project are documented here. The format follows
 
 No release has been tagged yet.
 
+### Added (M4a)
+- Elastic backend: Elasticsearch ingest pipeline (grok, set, date, remove) with ECS field names
+  (new `ecs` column in `field_map.yaml`).
+- `onig` regex dialect for Elastic grok (Oniguruma, Ruby syntax) with explicit ASCII classes,
+  lookaround-based `\b`, and rejection of non-fixed-width lookbehind
+  (`ONIG_LOOKBEHIND_NOT_FIXED`).
+- Joda → java.time date conversion for the `date` processor, with findings for case-sensitive
+  text fields and fixed-width numeric fields.
+- Elastic emulator (grok/set/date/remove, strict Painless-condition subset).
+- Opt-in real-engine verification: `rosettalog verify --engine real`, `RealEngineRunner` plugins,
+  the Elasticsearch 9.5.4 runner (`_simulate` API), a four-way comparison in the report, the
+  `@pytest.mark.real_engine` differential suite, and the weekly/manual
+  `real-engines.yml` workflow.
+- New findings: `VERIFY_REAL_MISMATCH`, `VERIFY_EMULATOR_DIVERGENCE`, `VERIFY_REAL_ENGINE_ERROR`,
+  `VERIFY_REAL_NOT_COMPARABLE`, `ELASTIC_*` and `ONIG_*`.
+
+### Added (M4c)
+- Real KQL runners. `sentinel` uses the Kusto emulator (kustainer-linux pinned by digest,
+  `ACCEPT_EULA=Y`), is x86-64 with AVX2 only, and refuses ARM hosts with the documented reason.
+  `sentinel-adx` is opt-in and uses your Azure Data Explorer cluster via
+  `ROSETTALOG_ADX_CLUSTER/_DATABASE/_TOKEN`. Both ingest samples into a random temporary table,
+  run the generated KQL unmodified behind `let <table> = <temp>;`, and always drop the table.
+- `--runner` option on `rosettalog verify`, and a Sentinel job in the real-engines workflow.
+- Not yet run against a real engine: the Kusto emulator cannot run on the development Mac
+  (Apple Silicon), and no ADX cluster was available. Both runners are covered by stubbed-HTTP
+  unit tests. The CI job is the first real run.
+
+### Added (M4b)
+- Real Splunk runner (`splunk/splunk:10.4.3`, amd64): installs the generated app with
+  system-wide export, restarts so index-time settings apply, ingests via oneshot and reads
+  fields via search export. `_time` counts only with `timestartpos`; splunkd's certificate is
+  pinned. It has a weekly/manual workflow job.
+- Findings `SPLUNK_KV_MODE_NONE` and `SPLUNK_APP_SCOPE` (notes).
+- The runner waits for the image healthcheck and restarts with the CLI. An early REST restart
+  aborted provisioning, and the REST self-restart left splunkd down under Rosetta.
+- The Docker helper no longer uses `--rm`, so an engine that exits stays inspectable until
+  cleanup; `Container.healthy()` fails fast when a container has stopped.
+
+### Fixed (M4b), found by real-Splunk differential testing
+- props.conf now sets `KV_MODE = none`. Splunk's default automatic key=value extraction added
+  fields QRadar never extracts (e.g. `user`), and the emulator did not model that. The emulator
+  now refuses auto KV.
+- Named groups are no longer emitted in Splunk `REGEX`. Splunk extracted them as fields and
+  skipped `FORMAT $N`, which nulled `EVAL-user` on the Acme sample. The emulator refuses named
+  groups.
+
+- Real Splunk timestamps: year-less formats are inferred from event order (an out-of-order
+  sample got 2027 and was rejected), and when `TIME_FORMAT` fails Splunk falls back to automatic
+  recognition. Both are now reported (`SPLUNK_YEAR_INFERENCE`, `SPLUNK_TIMESTAMP_FALLBACK`, both
+  PARTIAL). The runner marks such `_time` values as not comparable instead of reporting a false
+  emulator divergence.
+
+### Fixed (M4a)
+- The Elastic backend no longer sets `locale: ENGLISH` on date processors. Elasticsearch 9.5.4
+  rejects that literal although the docs name it as the default; this was found by the first
+  differential run and has a regression test.
+
 ### Changed
 - Roadmap re-scoped. M2 is now an integration point plus an optional adapter for external AQL
   translators (no AQL grammar). M3 is QRadar rules → Sigma only, with pySigma for targets.

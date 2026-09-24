@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -20,6 +21,32 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         action="store_true",
         help="Rewrite golden files in tests/golden from the current output.",
     )
+    parser.addoption(
+        "--real-engine",
+        action="store_true",
+        help="Run @pytest.mark.real_engine tests against real target engines (needs Docker; "
+        "or set ROSETTALOG_REAL_ENGINE=1).",
+    )
+    parser.addoption(
+        "--real-targets",
+        default=os.environ.get("ROSETTALOG_REAL_TARGETS", ""),
+        help="Comma-separated real-engine targets to test (default: all).",
+    )
+
+
+def real_engine_enabled(config: pytest.Config) -> bool:
+    return (
+        bool(config.getoption("--real-engine")) or os.environ.get("ROSETTALOG_REAL_ENGINE") == "1"
+    )
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    if real_engine_enabled(config):
+        return
+    skip = pytest.mark.skip(reason="real-engine test; enable with --real-engine")
+    for item in items:
+        if "real_engine" in item.keywords:
+            item.add_marker(skip)
 
 
 @pytest.fixture

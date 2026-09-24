@@ -58,6 +58,10 @@ Rosettalog does **not** re-implement them:
 | `rosettalog.frontends.qradar_lsx` | LSX XML to IR. XML parsing is hardened: no DTDs, entities or network access. |
 | `rosettalog.backends.sentinel` | IR to a KQL parser function with ASIM field names. |
 | `rosettalog.backends.splunk` | IR to props.conf and transforms.conf with CIM field names. |
+| `rosettalog.backends.elastic` | IR to an Elasticsearch ingest pipeline (grok, set, date, remove) with ECS field names. |
+| `rosettalog.regex.grok`, `rosettalog.regex.onig_emulation` | Grok patterns (every group renamed as a named capture) and their Python emulation. |
+| `rosettalog.timefmt.javatime` | Joda → java.time patterns for the Elasticsearch `date` processor, and a STRICT, case-sensitive parser for emulation. |
+| `rosettalog.verify.real` | Opt-in real-engine runners (entry-point group `rosettalog.runners`) and a small Docker CLI wrapper. |
 | `rosettalog.verify` | Sample loading and ground-truth checks, the source emulator (an IR evaluator), target emulators, and the harness. |
 | `rosettalog.report` | Report models, JSON (with a schema) and Markdown rendering. |
 | `rosettalog.pipeline` | Orchestration: discover inputs, pick frontends, run backends, verify, build the report. |
@@ -91,6 +95,27 @@ Backends list every generated setting with the point at which it takes effect
 A translated field that depends on index-time configuration gets a finding
 (`SPLUNK_INDEX_TIME_DEPENDENCY`, PARTIAL). Its correctness depends on where the setting is
 deployed and on when the data was indexed.
+
+## Real-engine runners
+
+`RealEngineRunner` plugins (group `rosettalog.runners`) run the *generated* content on the real
+target engine. `rosettalog verify --engine real` uses them, as does the opt-in
+`@pytest.mark.real_engine` differential suite:
+
+- Each runner pins its image, reports why it cannot run on the current host
+  (`unavailable_reason`), and opens a `session()` that returns field values per sample, or a
+  `NotComparable` value when a result cannot be compared.
+- Containers publish ports on 127.0.0.1 only, carry the label `rosettalog.verify=1`, and are
+  always removed. An existing engine can be reused through an environment variable URL.
+- The harness compares four values per field: QRadar (emulated), target emulator, real engine
+  and expected. Target emulator ≠ real engine is an emulator bug
+  (`VERIFY_EMULATOR_DIVERGENCE`). It must be fixed together with a container-free regression
+  test.
+- The core stays SIEM-agnostic: the harness only knows the runner protocol.
+- Runners today are `elastic` (Elasticsearch 9.5.4), `splunk` (Splunk 10.4.3, amd64),
+  `sentinel` (Kusto emulator, x86-64 with AVX2 only) and `sentinel-adx` (opt-in; your Azure Data
+  Explorer cluster, the only runner that sends data off the machine). See
+  [verification.md](verification.md) for images, platforms and resources.
 
 ## Verification and ground truth
 

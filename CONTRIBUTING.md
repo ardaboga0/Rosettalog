@@ -45,6 +45,18 @@ uv run pytest --update-golden  # after an intentional change to generated output
 Python 3.11+, type hints everywhere (`mypy --strict`), pydantic v2 models, ruff for lint and
 format (line length 100). Keep modules small and add docstrings where behaviour is not obvious.
 
+## Real-engine verification (optional, needs Docker)
+
+```bash
+uv run rosettalog verify <lsx> -s <samples.yaml> --to elastic --engine real
+uv run pytest -m real_engine --real-engine --real-targets elastic   # differential suite
+```
+
+See [docs/verification.md](docs/verification.md#real-engines-four-way-comparison-opt-in) for
+the images, resource needs and macOS/Linux setup. If the differential suite shows the emulator
+disagreeing with the real engine, fix the emulator and add a regression test to
+`tests/unit/test_emulator_regressions.py` that names the engine version and the sample.
+
 ## Pull requests
 
 - One logical change per PR, with tests. For generated-output changes, commit updated golden

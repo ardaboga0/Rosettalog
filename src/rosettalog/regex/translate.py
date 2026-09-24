@@ -1,10 +1,17 @@
-"""Translate Java regular expressions to other engines, reporting every semantic difference.
+r"""Translate Java regular expressions to other engines, reporting every semantic difference.
 
 Targets:
 
 * ``re2``    - Google RE2, used by Kusto (Microsoft Sentinel KQL).
 * ``pcre``   - PCRE, used by Splunk ``REGEX``/``EXTRACT``/``match()``.
 * ``python`` - the third-party ``regex`` module; used only to *emulate* the Java source locally.
+* ``onig``   - Oniguruma as embedded by Elasticsearch grok: Joni with ``Syntax.RUBY``
+  (https://github.com/elastic/elasticsearch/blob/main/libs/grok/src/main/java/org/elasticsearch/grok/Grok.java,
+  https://github.com/jruby/joni/blob/master/src/org/joni/Syntax.java). Ruby syntax differs from
+  Java: ``\h`` is a hex digit, ``^``/``$`` are line anchors, ``(?m)`` means dot-all and there is
+  no ``\Q..\E`` (https://github.com/kkos/oniguruma/blob/master/doc/RE). The translator
+  therefore emits only constructs whose meaning is the same in both: explicit ASCII classes for
+  ``\d \w \s``, lookaround-based ``\b``, ``\A``/``\Z`` anchors and explicit whitespace sets.
 
 A translation returns the new pattern (or ``None`` if impossible) and a list of issues. An issue
 with status PARTIAL means the pattern was emitted but may not behave identically; UNSUPPORTED
@@ -31,11 +38,17 @@ from rosettalog.regex.tokenizer import (
     tokenize,
 )
 
-Target = Literal["re2", "pcre", "python"]
+Target = Literal["re2", "pcre", "python", "onig"]
 
 META = set("\\^$.|?*+()[]{}")
 CLASS_SPECIAL = set("\\]^-[&")
 RE2_MAX_REPEAT = 1000
+
+# Java's predefined classes are ASCII-only by default; Oniguruma's may not be. Spell them out.
+_ASCII_CLASS = {"d": "0-9", "w": "a-zA-Z0-9_", "s": " \\t\\n\\x0B\\f\\r"}
+_WORD = "[a-zA-Z0-9_]"
+_ONIG_BOUNDARY = f"(?:(?<={_WORD})(?!{_WORD})|(?<!{_WORD})(?={_WORD}))"
+_ONIG_NON_BOUNDARY = f"(?:(?<={_WORD})(?={_WORD})|(?<!{_WORD})(?!{_WORD}))"
 
 # Java POSIX character classes are US-ASCII only by default. Expanded as class members.
 POSIX = {
@@ -99,6 +112,10 @@ class _Unsupported(Exception):
 class _Ctx:
     target: Target
     issues: list[RegexIssue] = field(default_factory=list)
+    group_numbers: dict[str, int] = field(default_factory=dict)
+    """pcre only: Java group name -> number (names are dropped for Splunk, see _group_open)."""
+    multiline: bool = False
+    """onig only: the pattern turns on Java's MULTILINE flag somewhere."""
 
     def partial(self, code: str, message: str) -> None:
         issue = RegexIssue(Status.PARTIAL, code, message)
@@ -114,6 +131,8 @@ class _Ctx:
 
 def _fmt_cp(cp: int, target: Target, *, in_class: bool = False) -> str:
     ch = chr(cp)
+    if target == "onig" and cp == 0x25:
+        return "\\x{25}"  # never let grok see '%{' (its pattern-reference syntax)
     special = CLASS_SPECIAL if in_class else META
     if 0x20 <= cp < 0x7F:
         if ch in special:
@@ -169,7 +188,8 @@ def _class_item(item: ClassItem, ctx: _Ctx) -> str:
     match item.kind:
         case ItemKind.CHAR:
             assert item.cp is not None
-            if len(item.text) == 1 and 0x20 <= item.cp < 0x7F and item.text not in CLASS_SPECIAL:
+            plain = len(item.text) == 1 and 0x20 <= item.cp < 0x7F
+            if plain and item.text not in CLASS_SPECIAL and not (t == "onig" and item.cp == 0x25):
                 return item.text
             return _fmt_cp(item.cp, t, in_class=True)
         case ItemKind.RANGE:
@@ -177,6 +197,9 @@ def _class_item(item: ClassItem, ctx: _Ctx) -> str:
             assert item.hi is not None
             return _fmt_cp(item.cp, t, in_class=True) + "-" + _fmt_cp(item.hi, t, in_class=True)
         case ItemKind.ESCAPE_CLASS:
+            if t == "onig":
+                ascii_members = _ASCII_CLASS[item.name.lower()]
+                return f"[^{ascii_members}]" if item.name.isupper() else ascii_members
             return "\\" + item.name
         case ItemKind.PROPERTY:
             text, members = _property_members(item.name, ctx)
@@ -210,7 +233,11 @@ def _flags(on: str, off: str, ctx: _Ctx) -> tuple[str, str]:
     keep_on: list[str] = []
     keep_off: list[str] = []
     for flag, bucket in [(f, keep_on) for f in on] + [(f, keep_off) for f in off]:
-        if flag in "ims":
+        if ctx.target == "onig" and flag in "sm":
+            # Ruby syntax: (?m) is dot-all (Java's s); Java's m is handled via raw ^/$ anchors.
+            if flag == "s":
+                bucket.append("m")
+        elif flag in "ims":
             bucket.append(flag)
         elif flag == "U":
             raise ctx.unsupported(
@@ -253,12 +280,27 @@ def _emit(tokens: list[Token], ctx: _Ctx) -> str:
         match tok.kind:
             case Kind.LITERAL:
                 assert tok.cp is not None
-                out.append(tok.text if tok.verbatim else _fmt_cp(tok.cp, t))
+                verbatim = tok.verbatim and not (t == "onig" and tok.cp == 0x25)
+                out.append(tok.text if verbatim else _fmt_cp(tok.cp, t))
             case Kind.CLASS:
+                if (
+                    t == "onig"
+                    and tok.negated
+                    and any(i.kind is ItemKind.ESCAPE_CLASS and i.name.isupper() for i in tok.items)
+                ):
+                    raise ctx.unsupported(
+                        "REGEX_CLASS_SET_OPERATION",
+                        f"'{tok.text}' negates a negated class escape; expressing it for "
+                        "Oniguruma would need class intersection.",
+                    )
                 body = "".join(_class_item(item, ctx) for item in tok.items)
                 out.append("[" + ("^" if tok.negated else "") + body + "]")
             case Kind.ESCAPE_CLASS:
-                out.append(tok.text)
+                if t == "onig":
+                    ascii_members = _ASCII_CLASS[tok.name.lower()]
+                    out.append(("[^" if tok.name.isupper() else "[") + ascii_members + "]")
+                else:
+                    out.append(tok.text)
             case Kind.PROPERTY:
                 text, members = _property_members(tok.name, ctx)
                 if members:
@@ -275,7 +317,7 @@ def _emit(tokens: list[Token], ctx: _Ctx) -> str:
                 alt = r"\r\n|[" + _ranges([(0x0A, 0x0D), (0x85, 0x85), (0x2028, 0x2029)], t) + "]"
                 if t == "pcre":
                     out.append(r"\R")
-                elif t == "python":
+                elif t in ("python", "onig"):
                     out.append("(?>" + alt + ")")
                 else:
                     ctx.partial(
@@ -294,8 +336,12 @@ def _emit(tokens: list[Token], ctx: _Ctx) -> str:
                         "RE2_NO_BACKREFERENCE",
                         f"Backreference '{tok.text}' is not supported by RE2 (KQL).",
                     )
-                if isinstance(tok.ref, str):
-                    out.append(f"\\k<{tok.ref}>" if t == "pcre" else f"(?P={tok.ref})")
+                if t == "onig":
+                    out.append(f"\\k<{tok.ref}>")
+                elif isinstance(tok.ref, str) and t == "pcre":
+                    out.append(f"\\g{{{ctx.group_numbers[tok.ref]}}}")
+                elif isinstance(tok.ref, str):
+                    out.append(f"(?P={tok.ref})")
                 else:
                     out.append(f"\\g{{{tok.ref}}}" if t == "pcre" else f"\\g<{tok.ref}>")
             case Kind.GROUP_OPEN:
@@ -311,6 +357,8 @@ def _emit(tokens: list[Token], ctx: _Ctx) -> str:
 
 def _anchor(name: str, ctx: _Ctx) -> str:
     t = ctx.target
+    if t == "onig":
+        return _onig_anchor(name, ctx)
     if name in ("^", "$", "\\b", "\\B", "\\A"):
         return name
     if name == "\\z":
@@ -333,13 +381,57 @@ def _anchor(name: str, ctx: _Ctx) -> str:
     raise AssertionError(name)  # pragma: no cover
 
 
+def _onig_anchor(name: str, ctx: _Ctx) -> str:
+    """Anchors for Oniguruma/Ruby syntax, where ^ and $ always match at line boundaries."""
+    if name in ("^", "$"):
+        if ctx.multiline:
+            ctx.partial(
+                "ONIG_MULTILINE_ANCHORS",
+                "The pattern uses Java's MULTILINE flag; '^'/'$' are emitted as Ruby line "
+                "anchors for the whole pattern, which may differ where the flag is scoped.",
+            )
+            return name
+        return "\\A" if name == "^" else "\\Z"
+    if name == "\\b":
+        return _ONIG_BOUNDARY
+    if name == "\\B":
+        return _ONIG_NON_BOUNDARY
+    return name  # \A \z \Z \G have the same meaning in Oniguruma
+
+
+def _onig_lookbehind_fixed(tokens: list[Token], start: int) -> bool:
+    """Oniguruma requires fixed-width lookbehind (only top-level alternatives may differ)."""
+    depth = 0
+    for tok in tokens[start + 1 :]:
+        if tok.kind is Kind.GROUP_OPEN:
+            depth += 1
+        elif tok.kind is Kind.GROUP_CLOSE:
+            if depth == 0:
+                return True
+            depth -= 1
+        elif _variable_width(tok, depth):
+            return False
+    return True
+
+
+def _variable_width(tok: Token, depth: int) -> bool:
+    """Token that can make a lookbehind variable-width (nested alternation counts)."""
+    if tok.kind is Kind.QUANT:
+        return tok.qmax != tok.qmin
+    return tok.kind in (Kind.BACKREF, Kind.LINEBREAK) or (tok.kind is Kind.ALT and depth > 0)
+
+
 def _group_open(tok: Token, tokens: list[Token], idx: int, ctx: _Ctx) -> str:
     t = ctx.target
     g = tok.group
     if g is GroupKind.CAPTURE:
         return "("
     if g is GroupKind.NAMED:
-        return f"(?<{tok.name}>" if t == "pcre" else f"(?P<{tok.name}>"
+        if t == "pcre":
+            # Splunk turns named groups in a transform's REGEX into fields and then does not
+            # apply FORMAT $N (found with Splunk 10.4.3), so named groups become plain groups.
+            return "("
+        return f"(?<{tok.name}>" if t == "onig" else f"(?P<{tok.name}>"
     if g is GroupKind.NONCAPTURE:
         return "(?:"
     if g is GroupKind.SCOPED_FLAGS:
@@ -361,6 +453,12 @@ def _group_open(tok: Token, tokens: list[Token], idx: int, ctx: _Ctx) -> str:
             f"Lookaround '{tok.text}...)' is not supported by RE2 (KQL).",
         )
     lookbehind = g in (GroupKind.LOOKBEHIND, GroupKind.NEG_LOOKBEHIND)
+    if t == "onig" and lookbehind and not _onig_lookbehind_fixed(tokens, idx):
+        raise ctx.unsupported(
+            "ONIG_LOOKBEHIND_NOT_FIXED",
+            "Lookbehind is not fixed-width. Oniguruma (grok) rejects such patterns, and an "
+            "invalid grok pattern would make the whole ingest pipeline unusable.",
+        )
     if t == "pcre" and lookbehind and _lookbehind_variable(tokens, idx):
         ctx.partial(
             "PCRE_VARIABLE_LOOKBEHIND",
@@ -420,9 +518,23 @@ def _validate(pattern: str, target: Target) -> str | None:
     return None
 
 
+def _uses_multiline(tokens: list[Token]) -> bool:
+    return any(
+        "m" in t.flags_on
+        for t in tokens
+        if t.kind is Kind.FLAGS or (t.kind is Kind.GROUP_OPEN and t.group is GroupKind.SCOPED_FLAGS)
+    )
+
+
 def translate_tokens(tokens: list[Token], target: Target) -> RegexTranslation:
     """Translate an already tokenized pattern (or a slice of one) without validation."""
-    ctx = _Ctx(target)
+    ctx = _Ctx(target, multiline=target == "onig" and _uses_multiline(tokens))
+    number = 0
+    for tok in tokens:
+        if tok.kind is Kind.GROUP_OPEN and tok.group in (GroupKind.CAPTURE, GroupKind.NAMED):
+            number += 1
+            if tok.group is GroupKind.NAMED:
+                ctx.group_numbers[tok.name] = number
     try:
         text = _emit(tokens, ctx)
     except _Unsupported as exc:
@@ -450,7 +562,9 @@ def translate(source: str, target: Target, *, case_insensitive: bool = False) ->
     pattern = ("(?i)" if case_insensitive else "") + result.pattern
     error = _validate(pattern, target)
     if error is not None:
-        code = {"re2": "RE2_COMPILE_ERROR", "python": "EMULATION_COMPILE_ERROR"}[target]
+        code = {"re2": "RE2_COMPILE_ERROR", "python": "EMULATION_COMPILE_ERROR"}.get(
+            target, "REGEX_COMPILE_ERROR"
+        )
         issue = RegexIssue(
             Status.UNSUPPORTED,
             code,

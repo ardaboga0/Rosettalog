@@ -48,24 +48,40 @@ def _verification(v: VerificationResult) -> list[str]:
         "confirm consistency with Rosettalog's reading of the source, not QRadar's behaviour.",
         "",
     ]
-    if v.error:
-        lines += [f"> Emulation error: {_cell(v.error)}", ""]
+    if v.real_engine:
+        lines += [
+            f"**Real engine:** {v.real_engine}. Each field is compared four ways: QRadar "
+            "(emulated) vs target emulator vs real target engine vs expected.",
+            "",
+        ]
+    for label, error in (("Emulation error", v.error), ("Real engine error", v.real_error)):
+        if error:
+            lines += [f"> {label}: {_cell(error)}", ""]
     rows = [
         (s, c) for s in v.samples for c in s.checks if not c.ok or not c.source_matches_expected
     ]
     if rows:
-        lines += [
-            "| Sample | Ground truth | Field | Target field | QRadar (emulated) | Generated "
-            "| Expected |",
-            "|---|---|---|---|---|---|---|",
-        ]
+        real = v.real_engine is not None
+        head = (
+            "| Sample | Ground truth | Field | Target field | Scope | QRadar (emulated) | Emulator "
+        )
+        head += "| Real engine | Expected |" if real else "| Expected |"
+        lines += [head, "|---" * (9 if real else 8) + "|"]
         for sample, c in rows:
             expected = _code(c.expected) if c.has_expected else ""
-            lines.append(
-                f"| {_cell(sample.name)} | {_cell(sample.ground_truth_source or '')} | {c.field} "
-                f"| {c.target_field or '*(not generated)*'} | {_code(c.source)} "
-                f"| {_code(c.target)} | {expected} |"
-            )
+            cells = [
+                _cell(sample.name),
+                _cell(sample.ground_truth_source or ""),
+                c.field,
+                c.target_field or "*(not generated)*",
+                c.scope or "",
+                _code(c.source),
+                _code(c.target) + (" ⚠ diverges from real engine" if c.emulator_diverges else ""),
+            ]
+            if real:
+                cells.append(_code(c.real) if c.has_real else f"*(not compared: {c.real_note})*")
+            cells.append(expected)
+            lines.append("| " + " | ".join(cells) + " |")
         lines.append("")
     return lines
 

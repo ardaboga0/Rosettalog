@@ -1,0 +1,58 @@
+name: Real-engine verification
+
+# Opt-in, container-based differential tests: generated content runs on the real target engines
+# and is compared with the local emulators. Default CI (ci.yml) stays container-free.
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: "Comma-separated targets (elastic, splunk, sentinel)"
+        required: false
+        default: "elastic,splunk,sentinel"
+  schedule:
+    - cron: "17 3 * * 1" # weekly, Monday 03:17 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  elastic:
+    if: github.event_name == 'schedule' || contains(github.event.inputs.targets, 'elastic')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+      # Image pinned in src/rosettalog/verify/real/elastic.py
+      - run: uv run pytest -m real_engine --real-engine --real-targets elastic -ra
+
+  splunk:
+    if: github.event_name == 'schedule' || contains(github.event.inputs.targets, 'splunk')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+      # Image pinned in src/rosettalog/verify/real/splunk.py (amd64; license accepted via the
+      # documented SPLUNK_START_ARGS / SPLUNK_GENERAL_TERMS variables set by the runner).
+      - run: uv run pytest -m real_engine --real-engine --real-targets splunk -ra
+
+  sentinel:
+    if: github.event_name == 'schedule' || contains(github.event.inputs.targets, 'sentinel')
+    runs-on: ubuntu-latest # x86-64 with AVX2, as the Kusto emulator requires
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+      # Kusto emulator pinned by digest in src/rosettalog/verify/real/kusto.py; the runner sets
+      # ACCEPT_EULA=Y (Microsoft Software License Terms). The ADX runner is never used in CI.
+      - run: uv run pytest -m real_engine --real-engine --real-targets sentinel -ra

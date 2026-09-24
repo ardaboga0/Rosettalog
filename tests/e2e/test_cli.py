@@ -26,12 +26,12 @@ def test_convert_writes_outputs_and_reports(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert (out / "sentinel" / "acme_fw_lsx" / "AcmeFwLsxParser.kql").is_file()
     assert (out / "splunk" / "acme_fw_lsx" / "props.conf").is_file()
-    report = MigrationReport.model_validate_json((out / "report.json").read_text())
+    report = MigrationReport.model_validate_json((out / "report.json").read_text(encoding="utf-8"))
     by_target = {t.target: t for t in report.artifacts[0].targets}
     assert by_target["sentinel"].status == "PARTIAL"
     assert by_target["sentinel"].verification.passed == 2
     assert by_target["splunk"].verification.passed == 4
-    md = (out / "report.md").read_text()
+    md = (out / "report.md").read_text(encoding="utf-8")
     assert "RE2_NO_LOOKAROUND" in md
     assert "2/4 samples" in md
     assert "Index-time settings: take effect only for data indexed **after** deployment" in md
@@ -68,7 +68,7 @@ def test_verify_exit_codes() -> None:
         ],
     )
     assert fails.exit_code == 2
-    assert "UserName: qradar='bob.smith' sentinel=None" in fails.output
+    assert "UserName: qradar='bob.smith' sentinel-emulator=None" in fails.output
     passes = runner.invoke(
         app,
         [
@@ -93,7 +93,7 @@ def test_options_are_passed_to_backends(tmp_path: Path) -> None:
         ],
     )  # fmt: skip
     assert result.exit_code == 0, result.output
-    kql = (tmp_path / "sentinel" / "acme_fw_lsx" / "AcmeParser.kql").read_text()
+    kql = (tmp_path / "sentinel" / "acme_fw_lsx" / "AcmeParser.kql").read_text(encoding="utf-8")
     assert "AcmeFw_CL" in kql
     assert "RawData" in kql
 
@@ -115,14 +115,17 @@ def test_non_lsx_input_is_reported_unsupported(tmp_path: Path) -> None:
         app, ["convert", str(FIXTURES / "not_lsx.xml"), "--to", "splunk", "-o", str(tmp_path)]
     )
     assert result.exit_code == 0
-    report = json.loads((tmp_path / "report.json").read_text())
+    report = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
     assert report["artifacts"][0]["targets"][0]["status"] == "UNSUPPORTED"
 
 
 def test_directory_input(tmp_path: Path) -> None:
     result = runner.invoke(app, ["convert", str(FIXTURES), "--to", "sentinel", "-o", str(tmp_path)])
     assert result.exit_code == 0, result.output
-    names = {a["name"] for a in json.loads((tmp_path / "report.json").read_text())["artifacts"]}
+    names = {
+        a["name"]
+        for a in json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))["artifacts"]
+    }
     assert {"tessivor_vpn.lsx", "edge_cases.lsx"} <= names
 
 
@@ -140,7 +143,9 @@ def test_inspect_plugins_schema() -> None:
 
 def test_require_ground_truth_rejects_incomplete_samples(tmp_path: Path) -> None:
     samples = tmp_path / "s.yaml"
-    samples.write_text("samples:\n  - log: 'action=deny'\n    expected: {EventName: deny}\n")
+    samples.write_text(
+        "samples:\n  - log: 'action=deny'\n    expected: {EventName: deny}\n", encoding="utf-8"
+    )
     result = runner.invoke(
         app,
         [

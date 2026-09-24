@@ -58,3 +58,103 @@ Empty strings and missing values are treated the same.
   on QRadar are the way to anchor behaviour to reality.
 - Joda literal matching is *assumed* to be exact, so syslog's space-padded day (`Mar  4`) does
   not match `MMM d`. This is unconfirmed; see confirmation case 09.
+
+## Real engines: four-way comparison (opt-in)
+
+The emulators are Rosettalog's own code, so they can be wrong. `--engine real` also runs the
+**generated content on the real target engine**, in a local container, and compares four
+values for every field of every sample:
+
+| Value | Where it comes from | What a difference means |
+|---|---|---|
+| **QRadar (emulated)** | Source emulator over the IR | Rosettalog's reading of the LSX (assumptions A01–A16 apply) |
+| **Target emulator** | Local interpreter of the generated files | The translation as Rosettalog's emulator executes it |
+| **Real engine** | The real target engine running the generated files | What the SIEM actually does |
+| **Expected** | `expected` in the samples file | Ground truth (see `ground_truth_source`) |
+
+- Target emulator ≠ real engine → **`VERIFY_EMULATOR_DIVERGENCE`**: an *emulator bug*. It is
+  reported with the sample and field. Fix the emulator and add a regression test to
+  `tests/unit/test_emulator_regressions.py` (container-free, naming the engine version that
+  exposed it).
+- Real engine ≠ QRadar (emulated) or expected → **`VERIFY_REAL_MISMATCH`**: the translation
+  really differs on that engine.
+- A value that depends on the engine's clock cannot be compared: for example, a timestamp
+  without a year while the samples' `reference_time` is in another year. It is reported as
+  **`VERIFY_REAL_NOT_COMPARABLE`** (a note) instead of guessed.
+- Each field shows the **scope** of the setting that produced it (index-time, search-time or
+  query-time). This matters because, e.g., index-time settings only apply to data ingested after
+  deployment.
+
+```sh
+rosettalog verify examples/acme_firewall/acme_fw.lsx.xml \
+    -s examples/acme_firewall/samples.yaml --to elastic --engine real
+uv run pytest -m real_engine --real-engine --real-targets elastic   # differential test suite
+```
+
+Only the synthetic samples being verified are sent to the engine. Containers publish their
+ports on `127.0.0.1` only, carry the label `rosettalog.verify=1`, and are removed afterwards.
+To reuse an engine you already run, set its URL (e.g. `ROSETTALOG_ELASTIC_URL`).
+
+### Runners and pinned images
+
+| Target | Runner | Image (pinned) | Platforms | Resources |
+|---|---|---|---|---|
+| elastic | `elastic` | `docker.elastic.co/elasticsearch/elasticsearch:9.5.4` (ingest `_simulate` API) | linux/amd64, linux/arm64 (native on Apple Silicon) | ~2 GB RAM (1 GB heap), ~2 GB image |
+| splunk | `splunk` | `splunk/splunk:10.4.3` (REST oneshot input + search export) | linux/amd64 only (Apple Silicon: Rosetta) | ~4 GB RAM, ~1.5 GB image; ~80 s to provision, ~60–80 s per artifact under Rosetta (a restart is needed per artifact) |
+| sentinel | `sentinel` (default) | Kusto emulator `mcr.microsoft.com/azuredataexplorer/kustainer-linux:latest@sha256:a44a0015…` (REST `/v1/rest/query`, `/v1/rest/mgmt`) | **linux/amd64 only, x86-64 CPU with SSE4.2/AVX2; ARM is not supported** (Microsoft docs), so it does not run on Apple Silicon, even with Rosetta | ≥ 4 GB RAM (`-m 4G`), image "several GBs"; license: `ACCEPT_EULA=Y` (Microsoft Software License Terms, which forbid benchmarking) |
+| sentinel | `sentinel-adx` (opt-in) | Your Azure Data Explorer cluster | any | None locally; **sends the synthetic samples to your cluster** |
+
+**How the Splunk runner reads results.**
+
+- The generated `props.conf`/`transforms.conf` are installed as app `rosettalog_verify`, with
+  knowledge objects exported system-wide (without `export = system`, search-time extractions
+  in an app apply only inside that app).
+- Splunk is restarted, and only then are the samples ingested. Index-time settings
+  (`SHOULD_LINEMERGE`, `TIME_PREFIX`, `TIME_FORMAT`) therefore apply to them, just as they would
+  for data indexed after deployment.
+- `_time` counts as extracted only if Splunk reports `timestartpos`, i.e. it found the timestamp
+  in the event. Otherwise it is "no value", not the index time.
+- The report's **Scope** column shows, per field, whether it came from an index-time or a
+  search-time setting.
+- License acceptance uses only the documented variables `SPLUNK_START_ARGS=--accept-license`
+  and `SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com`. A random admin password is
+  generated per run.
+- splunkd's TLS certificate is read from the container and pinned; verification is never
+  disabled.
+- The runner waits for the image's healthcheck (its Ansible provisioning) before touching
+  Splunk. Restarting earlier makes the container exit. Restarts use the synchronous
+  `splunk restart` CLI inside the container; the REST self-restart sometimes left splunkd down
+  under Rosetta.
+- **Where to run the full suite:** on Apple Silicon, Splunk runs emulated and needs about a minute
+  per artifact, so run a subset locally
+  (`-k "splunk and (acme or tessivor)"`) and the full suite through the `real-engines`
+  workflow on GitHub's x86-64 runners.
+- To reuse a running instance, set `ROSETTALOG_SPLUNK_URL`, `ROSETTALOG_SPLUNK_PASSWORD` and
+  `ROSETTALOG_SPLUNK_CONTAINER` (the runner copies files into that container and restarts it).
+
+**Kusto runners.**
+
+- Both runners ingest the samples into a uniquely named temporary table
+  (`.set-or-append … <| datatable(…)`). They run the generated file **unmodified**, preceded by
+  `let <source_table> = <temp table>;` (a `let` shadows the table name, so none of your tables
+  is read or written), and always drop the temporary table.
+- **Kusto emulator on Apple Silicon:** not possible. Microsoft states that "ARM processors
+  aren't supported" and that the emulator needs SSE4.2/AVX2, which Rosetta does not provide.
+  The runner refuses with that reason. Use a Linux x86-64 host, the `real-engines` GitHub
+  workflow (ubuntu-latest, x86-64), or the ADX runner.
+- **ADX runner (`--runner sentinel-adx`):** set `ROSETTALOG_ADX_CLUSTER` (https URL),
+  `ROSETTALOG_ADX_DATABASE` and `ROSETTALOG_ADX_TOKEN` (e.g.
+  `az account get-access-token --resource <cluster-url> --query accessToken -o tsv`). The token
+  needs rights to create and drop tables in that database. It is the **only** runner that sends
+  data off your machine, and it runs only when you set these variables.
+  **Status: tested only with a stubbed HTTP layer**; no real ADX cluster has been used yet.
+
+### Running locally
+
+- **Linux:** Docker Engine; nothing else is needed.
+- **macOS (Apple Silicon included):** any Docker runtime. With Colima, amd64-only images (see
+  the table) need Rosetta: `colima start --vm-type vz --vz-rosetta --cpu 4 --memory 8`.
+  Elasticsearch runs natively and Splunk runs under Rosetta. The Kusto emulator cannot run (ARM
+  is not supported): use the GitHub workflow, a Linux x86-64 host, or `--runner sentinel-adx`.
+- **CI:** `.github/workflows/real-engines.yml` runs the differential suite weekly and on demand
+  (`workflow_dispatch` with a `targets` input). The default CI never starts containers.

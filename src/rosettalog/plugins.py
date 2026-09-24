@@ -13,7 +13,9 @@ The built-in plugins register themselves the same way (see ``pyproject.toml``).
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from contextlib import AbstractContextManager
+from dataclasses import dataclass
 from datetime import datetime
 from functools import cache
 from importlib.metadata import entry_points
@@ -28,6 +30,7 @@ from rosettalog.ir import Artifact, Finding
 FRONTENDS_GROUP = "rosettalog.frontends"
 BACKENDS_GROUP = "rosettalog.backends"
 EMULATORS_GROUP = "rosettalog.emulators"
+RUNNERS_GROUP = "rosettalog.runners"
 
 
 class GeneratedFile(BaseModel):
@@ -123,6 +126,49 @@ class Emulator(Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class NotComparable:
+    """A real-engine value that cannot be compared (e.g. it depends on the engine's clock)."""
+
+    reason: str
+
+
+RealValue = str | None | NotComparable
+
+
+class RealEngineSession(Protocol):
+    """A running real engine (container or remote service) that can process samples."""
+
+    description: str
+    """E.g. "docker.elastic.co/elasticsearch/elasticsearch:9.5.4 (local container)"."""
+
+    def extract_batch(
+        self, result: BackendResult, logs: Sequence[str], *, now: datetime
+    ) -> list[dict[str, RealValue]]:
+        """For each log: generated field name -> value, like :meth:`Emulator.extract`."""
+        ...
+
+
+@runtime_checkable
+class RealEngineRunner(Protocol):
+    """Opt-in verification against the real target engine (``rosettalog verify --engine real``).
+
+    Runners must keep data local (containers bound to 127.0.0.1) unless the user explicitly
+    configures a remote service, and must clean up everything they create.
+    """
+
+    name: ClassVar[str]
+    target: ClassVar[str]
+    image: ClassVar[str]
+    """Pinned image reference, or a description of the remote service."""
+
+    def unavailable_reason(self) -> str | None:
+        """``None`` if the runner can run here; otherwise why not (platform, missing config)."""
+        ...
+
+    def session(self) -> AbstractContextManager[RealEngineSession]: ...
+
+
 def _load(group: str) -> dict[str, type]:
     found: dict[str, type] = {}
     for ep in entry_points(group=group):
@@ -159,3 +205,21 @@ def get_backend(name: str) -> Backend:
 
 def get_emulator(name: str) -> type[Emulator] | None:
     return emulators().get(name)
+
+
+@cache
+def runners() -> dict[str, type[RealEngineRunner]]:
+    return _load(RUNNERS_GROUP)
+
+
+def get_runner(target: str, name: str | None = None) -> RealEngineRunner:
+    """The runner called ``name``, or the default runner for ``target`` (same name)."""
+    available = runners()
+    key = name or target
+    cls = available.get(key)
+    if cls is None or cls.target != target:
+        known = ", ".join(f"{n} ({c.target})" for n, c in sorted(available.items())) or "none"
+        raise PluginError(
+            f"No real-engine runner '{key}' for target '{target}'. Available: {known}."
+        )
+    return cls()
