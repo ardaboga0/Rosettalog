@@ -12,6 +12,7 @@ events it is expected to match:
         fields: {SourceIp: 192.0.2.10, UserName: admin}
     expected:
       acme_admin_login: [e1]      # artifact id or rule name -> ids of the matching events
+      acme_brute_force: ["SourceIp=192.0.2.10"]   # counter/sequence rules: alerting groups
 """
 
 from __future__ import annotations
@@ -54,7 +55,8 @@ class RuleSampleSet(BaseModel):
         if dupes:
             raise ValueError(f"duplicate event ids: {', '.join(dupes)}")
         for rule, hits in self.expected.items():
-            unknown = [h for h in hits if h not in ids]
+            # stateful rules list the groups they alert on ("Field=value,..." or "(all)")
+            unknown = [h for h in hits if h not in ids and "=" not in h and h != "(all)"]
             if unknown:
                 raise ValueError(f"expected[{rule}] names unknown event ids: {', '.join(unknown)}")
         return self

@@ -29,7 +29,9 @@ NN-name/
 2. **Per case:** create a log source (*Admin > Log Sources > New*, **Universal DSM**, protocol
    **Syslog**, identifier **`rl-rules-NN`**) with that extension, and deploy changes.
 3. Build the case's rule(s) as described in its `README.md`, and deploy.
-4. **Send** the lines: `./send.sh <qradar-host> NN-name`.
+4. **Send** the lines: `./send.sh <qradar-host> NN-name`. It sends one line per second, pauses
+   at `# sleep N` lines, and replaces the placeholder syslog time (`Mar 24 10:00:00`) with the
+   current time, so event times follow the pacing (cases 04-08 depend on it).
 5. **Observe** which events each rule matched. In *Log Activity*, filter on the log source
    `rl-rules-NN` and add the column *Custom Rules* (or *Custom Rule Partially Matched*), or use
    AQL (the `creeventlist` field lists the rules an event matched; check the function names in
@@ -39,6 +41,8 @@ NN-name/
           RULENAME(creeventlist) AS rules, UTF8(payload) AS payload
    FROM events WHERE LOGSOURCENAME(logsourceid) = 'rl-rules-NN' LAST 1 HOURS
    ```
+   For counter and sequence cases (04-08), `samples.yaml` lists the **groups** the rule is
+   assumed to alert on (e.g. `SourceIp=192.0.2.10`), and event times relative to the first line.
 6. **Export** the case's rules and attach the export, e.g.
    `/opt/qradar/bin/contentManagement.pl -a export -c customrule --id <rule id>` (see IBM's
    Content Management Tool docs). This rule XML is what Rosettalog's rule parser will be built
@@ -54,4 +58,9 @@ NN-name/
 | [01](01-value-case) | R01 | Are event-property "equals" and "contains" tests case-sensitive? | `rl_rules_01_equals`: e1<br>`rl_rules_01_contains`: e2 | Case-insensitive: the equals rule also matches admin and ADMIN (e2, e3); the contains rule also matches Admin, ADMIN and xAdminx (e1, e3, e4). | unconfirmed |
 | [02](02-regex-find) | R02 | Does a "matches regex" test match anywhere in the value, or must it match the whole value? | `rl_rules_02_regex`: e1, e2 | The whole value (only 'adm' matches; 'sysadmin' does not). | unconfirmed |
 | [03](03-missing-property) | R03 | How does a test on a property the event does not have evaluate, and its negation? | `rl_rules_03_not_bob`: e2, e3 | Any test on a missing property makes the rule not match, negated or not (e3 does not match). | unconfirmed |
+| [04](04-counter-window) | R04 | Is the "in N minutes" window of a counter test sliding, or fixed time buckets? | `rl_rules_04_counter`: SourceIp=192.0.2.10 | Fixed buckets (e.g. clock minutes): e1-e3 fall into two buckets when sending starts at about hh:mm:40, so the rule does not fire. | unconfirmed |
+| [05](05-counter-grouping) | R05 | With "the same Source IP and Username", are events counted per combination of both properties? | `rl_rules_05_counter`: SourceIp=192.0.2.10,UserName=a | Per Source IP only, or per property separately: the rule then also fires for 192.0.2.10 as a whole (already at e2), not only for 192.0.2.10 with user a (at e4). | unconfirmed |
+| [06](06-counter-firing) | R06 | Once a counter's threshold is reached, does the rule fire once, or again for every further event in the window? | `rl_rules_06_counter`: SourceIp=192.0.2.10 | The rule fires for e2, e3 and e4 (one alert or offense contribution each). | unconfirmed |
+| [07](07-sequence-gaps) | R07 | In a sequence ("in the order"), may other events occur between the steps? | `rl_rules_07_sequence`: SourceIp=192.0.2.10 | No. An event in between (e2) breaks the sequence, so 192.0.2.10 does not fire. | unconfirmed |
+| [08](08-sequence-window) | R08 | Is a sequence's "within N minutes" measured from the first to the last step? | `rl_rules_08_sequence`: SourceIp=192.0.2.11 | Measured between consecutive steps: 192.0.2.10 (40 s between steps, 80 s in total) fires too. | unconfirmed |
 <!-- END GENERATED: rule-confirmation-cases -->

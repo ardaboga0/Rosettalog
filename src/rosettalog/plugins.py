@@ -75,6 +75,9 @@ class TargetQuery(BaseModel):
     """Real-engine runner target that can execute it (``splunk``, ``sentinel``, ``elastic``)."""
     label: str
     """Who produced it, e.g. "pysigma-backend-splunk 2.1.0"."""
+    group_by: list[str] | None = None
+    """For correlation (stateful) queries: the generated group-by field names; the query then
+    returns alerting groups (``field=value,...`` or ``(all)``) instead of event ids."""
 
 
 class BackendResult(BaseModel):
@@ -185,13 +188,17 @@ class DetectionSession(Protocol):
     def run_detection(
         self, query: TargetQuery, content: str, events: Sequence[Mapping[str, str | int]]
     ) -> set[str]:
-        """Ids (``rl_event_id``) of the events the query matches. Values are strings, or ints
-        for fields with a numeric type."""
+        """Ids (``rl_event_id``) of the events the query matches or, when ``query.group_by`` is
+        set, the group keys it alerts on. Values are strings, or ints for fields with a numeric
+        type."""
         ...
 
 
 #: Field carrying each sample event's id in events sent to a real engine.
 EVENT_ID_FIELD = "rl_event_id"
+#: Field carrying each sample event's time (ISO 8601 UTC, ``...Z``) in events sent to a real
+#: engine; runners put it where the engine keeps event time (``_time``, ``@timestamp``).
+EVENT_TIME_FIELD = "rl_time"
 
 
 @runtime_checkable

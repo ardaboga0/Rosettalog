@@ -1,0 +1,182 @@
+[
+  {
+    "id": "tessivor_vpn_bruteforce",
+    "name": "Tessivor VPN: at least 3 failed logins from one source in 5 minutes",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/rules-stateful/stateful_rules.ir.json"
+    },
+    "detection": {
+      "rule_id": "100201",
+      "name": "Tessivor VPN: at least 3 failed logins from one source in 5 minutes",
+      "severity": 7,
+      "condition": {
+        "kind": "field",
+        "field": "EventName",
+        "op": "equals",
+        "values": [
+          "auth_fail"
+        ],
+        "case_sensitive": false,
+        "path": "test[1]"
+      },
+      "stateful": {
+        "kind": "counter",
+        "count": 3,
+        "window_s": 300,
+        "group_by": [
+          "SourceIp"
+        ],
+        "path": "test[2]"
+      }
+    }
+  },
+  {
+    "id": "acme_port_scan",
+    "name": "Acme FW: at least 3 different denied ports from one source in 1 minute",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/rules-stateful/stateful_rules.ir.json"
+    },
+    "detection": {
+      "rule_id": "100202",
+      "name": "Acme FW: at least 3 different denied ports from one source in 1 minute",
+      "severity": 5,
+      "condition": {
+        "kind": "field",
+        "field": "EventName",
+        "op": "equals",
+        "values": [
+          "conn_denied"
+        ],
+        "case_sensitive": false,
+        "path": "test[1]"
+      },
+      "stateful": {
+        "kind": "counter",
+        "count": 3,
+        "window_s": 60,
+        "group_by": [
+          "SourceIp"
+        ],
+        "distinct_field": "DestinationPort",
+        "path": "test[2]"
+      }
+    }
+  },
+  {
+    "id": "tessivor_fail_then_success",
+    "name": "Tessivor VPN: failed then successful login, same source and user, within 2 minutes",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/rules-stateful/stateful_rules.ir.json"
+    },
+    "detection": {
+      "rule_id": "100203",
+      "name": "Tessivor VPN: failed then successful login, same source and user, within 2 minutes",
+      "severity": 6,
+      "condition": {
+        "kind": "field",
+        "field": "EventName",
+        "op": "equals",
+        "values": [
+          "login_fail",
+          "login_ok"
+        ],
+        "case_sensitive": false,
+        "path": "test[1]"
+      },
+      "stateful": {
+        "kind": "sequence",
+        "ordered": true,
+        "window_s": 120,
+        "group_by": [
+          "SourceIp",
+          "UserName"
+        ],
+        "path": "test[2]",
+        "steps": [
+          {
+            "kind": "field",
+            "field": "EventName",
+            "op": "equals",
+            "values": [
+              "login_fail"
+            ],
+            "case_sensitive": false,
+            "path": "test[2]/step[1]"
+          },
+          {
+            "kind": "field",
+            "field": "EventName",
+            "op": "equals",
+            "values": [
+              "login_ok"
+            ],
+            "case_sensitive": false,
+            "path": "test[2]/step[2]"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "acme_config_and_login",
+    "name": "Acme FW: config change and admin login by one user within 10 minutes (any order)",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/rules-stateful/stateful_rules.ir.json"
+    },
+    "detection": {
+      "rule_id": "100204",
+      "name": "Acme FW: config change and admin login by one user within 10 minutes (any order)",
+      "severity": 4,
+      "condition": {
+        "kind": "field",
+        "field": "EventName",
+        "op": "equals",
+        "values": [
+          "cfg_change",
+          "login_ok"
+        ],
+        "case_sensitive": false,
+        "path": "test[1]"
+      },
+      "stateful": {
+        "kind": "sequence",
+        "ordered": false,
+        "window_s": 600,
+        "group_by": [
+          "UserName"
+        ],
+        "path": "test[2]",
+        "steps": [
+          {
+            "kind": "field",
+            "field": "EventName",
+            "op": "equals",
+            "values": [
+              "cfg_change"
+            ],
+            "case_sensitive": false,
+            "path": "test[2]/step[1]"
+          },
+          {
+            "kind": "field",
+            "field": "EventName",
+            "op": "equals",
+            "values": [
+              "login_ok"
+            ],
+            "case_sensitive": false,
+            "path": "test[2]/step[2]"
+          }
+        ]
+      }
+    }
+  }
+]

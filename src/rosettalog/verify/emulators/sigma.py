@@ -18,13 +18,14 @@ https://github.com/SigmaHQ/sigma-specification/blob/main/specification/sigma-app
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import regex as pyregex
 import yaml
 
 from rosettalog.plugins import BackendResult
+from rosettalog.verify.emulators.windows import TimedEvent, count_groups, sequence_groups
 
 KNOWN_MODIFIERS = {"contains", "cased", "re", "i", "m", "s"}
 
@@ -94,8 +95,8 @@ _TOKEN = re.compile(r"\s*(\(|\)|[A-Za-z_][A-Za-z0-9_]*)")
 
 
 class SigmaRuleEvaluator:
-    def __init__(self, text: str) -> None:
-        rule = yaml.safe_load(text)
+    def __init__(self, text: str | dict[str, Any]) -> None:
+        rule = yaml.safe_load(text) if isinstance(text, str) else text
         detection = dict(rule["detection"])
         condition = detection.pop("condition")
         if not isinstance(condition, str):
@@ -177,13 +178,66 @@ class SigmaEmulator:
     )
 
     def __init__(self, result: BackendResult) -> None:
-        rule = next((f for f in result.files if f.path.endswith(".yml")), None)
-        if rule is None:
+        text = next((f.content for f in result.files if f.path.endswith(".yml")), None)
+        if text is None:
             raise SigmaEvalError("no Sigma rule in the backend output")
-        self.rule = SigmaRuleEvaluator(rule.content)
+        docs = [d for d in yaml.safe_load_all(text) if d]
+        self.rules = {
+            str(d.get("name", "")): SigmaRuleEvaluator(d) for d in docs if "detection" in d
+        }
+        correlations = [d["correlation"] for d in docs if "correlation" in d]
+        if len(correlations) > 1 or (not correlations and len(self.rules) != 1):
+            raise SigmaEvalError("expected one rule, or rules plus one correlation rule")
+        self.correlation: dict[str, Any] | None = correlations[0] if correlations else None
 
     def extract(self, log: str, *, now: object) -> dict[str, str | None]:
         raise SigmaEvalError("Sigma rules do not extract fields")
 
     def matches(self, event: Mapping[str, object]) -> bool:
-        return self.rule.matches(event)
+        if self.correlation is not None:
+            raise SigmaEvalError("a correlation rule alerts on groups, not single events")
+        return next(iter(self.rules.values())).matches(event)
+
+    def alerting_groups(self, events: Sequence[TimedEvent]) -> set[str]:
+        """Group keys the correlation rule alerts on (Sigma correlation spec v2.1.0)."""
+        corr = self.correlation
+        if corr is None:
+            raise SigmaEvalError("not a correlation rule")
+        kind = corr["type"]
+        names = [str(n) for n in corr["rules"]]
+        unknown = [n for n in names if n not in self.rules]
+        if unknown or set(corr) - {"type", "rules", "group-by", "timespan", "condition"}:
+            raise SigmaEvalError(f"correlation not interpreted: {corr}")
+        group_by = [str(f) for f in corr.get("group-by", [])]
+        window = parse_timespan(str(corr["timespan"]))
+        rules = [self.rules[n] for n in names]
+        if kind in ("event_count", "value_count"):
+            cond = dict(corr["condition"])
+            field = cond.pop("field", None)
+            if list(cond) != ["gte"] or (kind == "value_count") != (field is not None):
+                raise SigmaEvalError(f"correlation condition not interpreted: {corr['condition']}")
+            matching = [e for e in events if any(r.matches(e.fields) for r in rules)]
+            return count_groups(
+                matching,
+                count=int(cond["gte"]),
+                window_s=window,
+                group_by=group_by,
+                distinct_field=field,
+            )
+        if kind in ("temporal", "temporal_ordered") and "condition" not in corr:
+            matching = [e for e in events if any(r.matches(e.fields) for r in rules)]
+            return sequence_groups(
+                matching,
+                [r.matches for r in rules],
+                ordered=kind == "temporal_ordered",
+                window_s=window,
+                group_by=group_by,
+            )
+        raise SigmaEvalError(f"correlation type {kind} not interpreted")
+
+
+def parse_timespan(text: str) -> int:
+    units = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+    if len(text) < 2 or text[-1] not in units or not text[:-1].isdigit():
+        raise SigmaEvalError(f"timespan {text!r} not interpreted")
+    return int(text[:-1]) * units[text[-1]]

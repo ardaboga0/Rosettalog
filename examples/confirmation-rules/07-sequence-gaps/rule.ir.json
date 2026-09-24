@@ -1,0 +1,54 @@
+[
+  {
+    "id": "rl_rules_07_sequence",
+    "name": "rl-rules-07 sequence",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/confirmation-rules/07-sequence-gaps/rule.ir.json"
+    },
+    "detection": {
+      "rule_id": "rl_rules_07_sequence",
+      "name": "rl-rules-07 sequence",
+      "notes": "Confirmation case 07: Rosettalog's reading of the rule built in the QRadar UI (see README.md).",
+      "condition": {
+        "kind": "field",
+        "field": "EventName",
+        "op": "equals",
+        "values": [
+          "seq"
+        ],
+        "path": "test[1]"
+      },
+      "stateful": {
+        "kind": "sequence",
+        "ordered": true,
+        "window_s": 300,
+        "group_by": [
+          "SourceIp"
+        ],
+        "path": "test[2]",
+        "steps": [
+          {
+            "kind": "field",
+            "field": "UserName",
+            "op": "equals",
+            "values": [
+              "stepa"
+            ],
+            "path": "bb[A]"
+          },
+          {
+            "kind": "field",
+            "field": "UserName",
+            "op": "equals",
+            "values": [
+              "stepb"
+            ],
+            "path": "bb[B]"
+          }
+        ]
+      }
+    }
+  }
+]

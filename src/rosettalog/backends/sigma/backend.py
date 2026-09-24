@@ -35,6 +35,7 @@ from rosettalog.ir import (
     Artifact,
     AssumptionDependency,
     Cond,
+    Counter,
     DetectionSpec,
     FieldTest,
     Finding,
@@ -45,6 +46,7 @@ from rosettalog.ir import (
     QidTest,
     ReferenceTest,
     RuleRef,
+    Sequence,
     Status,
     Variant,
     leaves,
@@ -297,7 +299,7 @@ class _Builder:
         if test.op in ("equals", "contains"):
             # Case only matters for values with cased characters (not for "22").
             has_case = any(v.lower() != v.upper() for v in test.values)
-            # Every pinned pySigma backend refuses Sigma's "cased" (G0), so a case-sensitive
+            # Most pinned pySigma backends refuse Sigma's "cased" (G0), so a case-sensitive
             # test is written case-insensitively. That broadens it where it counts positively;
             # under NOT it would narrow the rule, so the test is dropped there.
             if test.case_sensitive and has_case and not positive:
@@ -339,8 +341,9 @@ class _Builder:
         values = ", ".join(test.values)
         what = f"{test.op} test on '{test.field}' ({values})"
         written = (
-            "is written without Sigma's 'cased' modifier (every pinned pySigma backend refuses "
-            "it), so it also matches other letter cases: the rule is broader."
+            "is written without Sigma's 'cased' modifier (the pinned Splunk, Kusto, Lucene and "
+            "ES|QL pySigma backends refuse it), so it also matches other letter cases: the rule "
+            "is broader."
         )
         self.case_findings[selection] = len(self.findings)
         self.findings.append(
@@ -428,8 +431,16 @@ def _values(key: str, values: list[str]) -> object:
     return out[0] if len(out) == 1 else out
 
 
-def rule_uuid(spec: DetectionSpec) -> str:
-    return str(uuid.uuid5(ID_NAMESPACE, f"qradar-rule:{spec.uuid or spec.rule_id}"))
+def rule_uuid(spec: DetectionSpec, suffix: str = "") -> str:
+    return str(uuid.uuid5(ID_NAMESPACE, f"qradar-rule:{spec.uuid or spec.rule_id}{suffix}"))
+
+
+def timespan(seconds: int) -> str:
+    """A Sigma timespan (number + s/m/h/d), in the largest unit that is exact."""
+    for unit, size in (("d", 86400), ("h", 3600), ("m", 60)):
+        if seconds % size == 0:
+            return f"{seconds // size}{unit}"
+    return f"{seconds}s"
 
 
 class SigmaBackend:
@@ -460,33 +471,50 @@ class SigmaBackend:
             return BackendResult(target=NAME, artifact_id=artifact.id, output_kind="detection")
         b = _Builder(spec, LogSourceMap.load(options.get("logsource_map")))
         self._metadata_findings(spec, b)
-        cond = b.pick_logsource(spec.condition)
-        approx = TRUE if isinstance(cond, _True) else b.approx(cond, True)
-        if isinstance(approx, _True | _False) or spec.rule_type == "offense":
+
+        def empty() -> BackendResult:
+            return BackendResult(
+                target=NAME, artifact_id=artifact.id, findings=b.findings, output_kind="detection"
+            )
+
+        base = b.pick_logsource(spec.condition)
+        # (name suffix, title suffix, condition) of every single-event rule to write
+        parts: list[tuple[str, str, Cond | _True]] = []
+        match spec.stateful:
+            case None:
+                parts.append(("", "", base))
+            case Counter():
+                parts.append(("_events", " (counted events)", base))
+            case Sequence(steps=steps):
+                for n, step in enumerate(steps, 1):
+                    both = step if isinstance(base, _True) else And(items=[base, step])
+                    parts.append((f"_step{n}", f" (step {n})", both))
+        approxes: list[Cond] = []
+        for suffix, _, part in parts:
+            approx = TRUE if isinstance(part, _True) else b.approx(part, True)
             if isinstance(approx, _True | _False):
+                what = f"step {suffix.removeprefix('_step')}" if "step" in suffix else "rule"
                 b.finding(
                     Status.UNSUPPORTED,
                     "SIGMA_CONDITION_EMPTY",
                     "",
-                    "No test of this rule could be expressed in Sigma, so no rule was written "
+                    f"No test of this {what} could be expressed in Sigma, so no rule was written "
                     "(it would match every event).",
                 )
-            return BackendResult(
-                target=NAME, artifact_id=artifact.id, findings=b.findings, output_kind="detection"
-            )
-        used = list(dict.fromkeys(b.used(approx)))
-        b.finish_case(used)
-        canonical = [b.selections[i][0] for i in used]
+                return empty()
+            approxes.append(approx)
+        if spec.rule_type == "offense":
+            return empty()
+        used_all = list(dict.fromkeys(i for a in approxes for i in b.used(a)))
+        b.finish_case(used_all)
+        stateful_fields = self._stateful_fields(spec)
+        canonical = [b.selections[i][0] for i in used_all]
         naming = resolve_names(
-            list(dict.fromkeys(f for f in canonical if f is not None)), "sigma", target=NAME
+            list(dict.fromkeys([*(f for f in canonical if f is not None), *stateful_fields])),
+            "sigma",
+            target=NAME,
         )
         b.findings.extend(naming.findings)
-        keys = {index: f"sel_{n}" for n, index in enumerate(used, 1)}
-        selections: dict[str, dict[str, list[str]]] = {}
-        for index in used:
-            fieldname, key, values = b.selections[index]
-            name = key if fieldname is None else naming.names[fieldname] + key
-            selections[keys[index]] = {name: values}
         if b.logsource is None:
             b.finding(
                 Status.PARTIAL,
@@ -498,22 +526,31 @@ class SigmaBackend:
                 suggestion="Provide sigma.logsource_map, or edit the logsource before deploying.",
             )
         logsource = b.logsource or {"product": "qradar"}
-        condition = render_condition(approx, keys)
-        rule = self._rule(
-            artifact, spec, logsource, selections, condition=condition, broadened=b.broadened
-        )
-        text = dump_yaml(rule)
+        detections = [self._detection(b, a, naming.names) for a in approxes]
+        if spec.stateful is None:
+            docs = [self._rule(artifact, spec, logsource, detections[0], broadened=b.broadened)]
+        else:
+            docs = [
+                self._base_rule(artifact, spec, suffix, title, logsource, detection)
+                for (suffix, title, _), detection in zip(parts, detections, strict=True)
+            ]
+            docs.append(
+                self._correlation(artifact, spec, [str(d["name"]) for d in docs], naming.names, b)
+            )
+        text = "---\n".join(dump_yaml(d) for d in docs)
         files = [GeneratedFile(path=f"{artifact.id}.yml", content=text)]
-        check = pysigma.check_and_convert(text, options.get("pysigma_targets", ""), artifact.id)
+        group_by = [naming.names[f] for f in spec.stateful.group_by] if spec.stateful else None
+        check = pysigma.check_and_convert(
+            text, options.get("pysigma_targets", ""), artifact.id, group_by=group_by
+        )
         files.extend(check.files)
         b.findings.extend(check.findings)
-        field_names = {f: naming.names[f] for f in naming.names}
         return BackendResult(
             target=NAME,
             artifact_id=artifact.id,
             files=files,
             findings=b.findings,
-            field_names=field_names,
+            field_names=dict(naming.names),
             options=dict(options),
             queries=check.queries,
             output_kind="detection",
@@ -521,13 +558,174 @@ class SigmaBackend:
         )
 
     @staticmethod
+    def _stateful_fields(spec: DetectionSpec) -> list[str]:
+        st = spec.stateful
+        if st is None:
+            return []
+        extra = [st.distinct_field] if isinstance(st, Counter) and st.distinct_field else []
+        return [*st.group_by, *extra]
+
+    @staticmethod
+    def _detection(b: _Builder, approx: Cond, names: Mapping[str, str]) -> dict[str, object]:
+        used = list(dict.fromkeys(b.used(approx)))
+        keys = {index: f"sel_{n}" for n, index in enumerate(used, 1)}
+        detection: dict[str, object] = {}
+        for index in used:
+            fieldname, key, values = b.selections[index]
+            name = key if fieldname is None else names[fieldname] + key
+            detection[keys[index]] = {name: _values(name, values)}
+        detection["condition"] = render_condition(approx, keys)
+        return detection
+
+    @staticmethod
+    def _base_rule(
+        artifact: Artifact,
+        spec: DetectionSpec,
+        suffix: str,
+        title: str,
+        logsource: dict[str, str],
+        detection: dict[str, object],
+    ) -> dict[str, object]:
+        return {
+            "title": (spec.name[: TITLE_MAX - len(title)] + title),
+            "id": rule_uuid(spec, suffix),
+            "name": artifact.id + suffix,
+            "status": "experimental",
+            "description": f"Events for the correlation rule '{artifact.id}' (same file).",
+            "logsource": logsource,
+            "detection": detection,
+        }
+
+    def _correlation(
+        self,
+        artifact: Artifact,
+        spec: DetectionSpec,
+        rules: list[str],
+        names: Mapping[str, str],
+        b: _Builder,
+    ) -> dict[str, object]:
+        st = spec.stateful
+        assert st is not None
+        corr: dict[str, object] = {}
+        if isinstance(st, Counter):
+            corr["type"] = "value_count" if st.distinct_field else "event_count"
+        else:
+            corr["type"] = "temporal_ordered" if st.ordered else "temporal"
+        corr["rules"] = rules
+        if st.group_by:
+            corr["group-by"] = [names[f] for f in st.group_by]
+        corr["timespan"] = timespan(st.window_s)
+        if isinstance(st, Counter):
+            condition: dict[str, object] = {"gte": st.count}
+            if st.distinct_field:
+                condition["field"] = names[st.distinct_field]
+            corr["condition"] = condition
+        self._stateful_findings(st, b)
+        rule = self._rule(artifact, spec, None, None, broadened=b.broadened)
+        rule["correlation"] = corr
+        # correlation rules have no logsource/detection; keep the key order readable
+        order = ["title", "id", "name", "status", "description", "correlation", "level", "qradar"]
+        return {k: rule[k] for k in order if k in rule}
+
+    @staticmethod
+    def _stateful_findings(st: Counter | Sequence, b: _Builder) -> None:
+        def linked(
+            code: str, topic: str, what: str, variants: dict[str, tuple[Status, str]]
+        ) -> None:
+            v = {k: Variant(status=s, message=f"{what} {m}") for k, (s, m) in variants.items()}
+            b.findings.append(
+                Finding(
+                    status=v["unconfirmed"].status,
+                    code=code,
+                    path=st.path,
+                    message=v["unconfirmed"].message,
+                    target=NAME,
+                    depends_on=AssumptionDependency(topic=topic, **v),
+                )
+            )
+
+        if isinstance(st, Counter):
+            what = (
+                f"The counter (at least {st.count} "
+                + (f"different {st.distinct_field} values" if st.distinct_field else "events")
+                + f" within {timespan(st.window_s)}) became a Sigma "
+                + ("value_count" if st.distinct_field else "event_count")
+                + " correlation, whose window is sliding (any interval of that length)."
+            )
+            linked(
+                "SIGMA_COUNTER_WINDOW",
+                "rule-counter-window",
+                what,
+                {
+                    "unconfirmed": (
+                        Status.PARTIAL,
+                        "QRadar counters are assumed to be sliding too.",
+                    ),
+                    "confirmed": (Status.FULL, "QRadar counters are sliding too."),
+                    "refuted": (
+                        Status.PARTIAL,
+                        "QRadar counts in fixed windows, so the Sigma rule also fires for events "
+                        "spread over two QRadar windows (broader).",
+                    ),
+                },
+            )
+            if len(st.group_by) > 1:
+                linked(
+                    "SIGMA_COUNTER_GROUPING",
+                    "rule-counter-grouping",
+                    f"Events are counted per combination of {', '.join(st.group_by)} "
+                    "(Sigma group-by).",
+                    {
+                        "unconfirmed": (Status.PARTIAL, "QRadar is assumed to do the same."),
+                        "confirmed": (Status.FULL, "QRadar does the same."),
+                        "refuted": (
+                            Status.UNSUPPORTED,
+                            "QRadar groups differently, so the Sigma rule does not mean the same.",
+                        ),
+                    },
+                )
+            return
+        kind = "temporal_ordered" if st.ordered else "temporal"
+        what = f"The sequence of {len(st.steps)} steps became a Sigma {kind} correlation"
+        linked(
+            "SIGMA_SEQUENCE_GAPS",
+            "rule-sequence-gaps",
+            what + ", in which other events may occur between the steps.",
+            {
+                "unconfirmed": (Status.PARTIAL, "QRadar is assumed to allow them too."),
+                "confirmed": (Status.FULL, "QRadar allows them too."),
+                "refuted": (
+                    Status.PARTIAL,
+                    "QRadar does not, so the Sigma rule also fires when other events interleave "
+                    "(broader).",
+                ),
+            },
+        )
+        linked(
+            "SIGMA_SEQUENCE_WINDOW",
+            "rule-sequence-window",
+            what + f", in which all steps fall within {timespan(st.window_s)} of each other.",
+            {
+                "unconfirmed": (
+                    Status.PARTIAL,
+                    "QRadar is assumed to measure its window from the first to the last step.",
+                ),
+                "confirmed": (Status.FULL, "QRadar measures from the first to the last step."),
+                "refuted": (
+                    Status.UNSUPPORTED,
+                    "QRadar measures differently, so the Sigma rule misses sequences QRadar "
+                    "detects.",
+                ),
+            },
+        )
+
+    @staticmethod
     def _rule(
         artifact: Artifact,
         spec: DetectionSpec,
-        logsource: dict[str, str],
-        selections: dict[str, dict[str, list[str]]],
+        logsource: dict[str, str] | None,
+        detection: dict[str, object] | None,
         *,
-        condition: str,
         broadened: list[dict[str, object]],
     ) -> dict[str, object]:
         rule: dict[str, object] = {"title": spec.name[:TITLE_MAX], "id": rule_uuid(spec)}
@@ -545,12 +743,10 @@ class SigmaBackend:
             description = f"{description}\n\n{note}" if description else note
         if description:
             rule["description"] = description
-        rule["logsource"] = logsource
-        detection: dict[str, object] = {
-            key: {k: _values(k, v) for k, v in sel.items()} for key, sel in selections.items()
-        }
-        detection["condition"] = condition
-        rule["detection"] = detection
+        if logsource is not None:
+            rule["logsource"] = logsource
+        if detection is not None:
+            rule["detection"] = detection
         if spec.severity is not None:
             rule["level"] = sigma_level(spec.severity)
         qradar: dict[str, object] = {"rule_id": spec.rule_id}

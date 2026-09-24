@@ -1,0 +1,4 @@
+from * metadata _id, _index, _version | where ((EventName in ("cfg_change", "login_ok")) and EventName=="cfg_change") or ((EventName in ("cfg_change", "login_ok")) and EventName=="login_ok")
+| eval event_type=case((EventName in ("cfg_change", "login_ok")) and EventName=="cfg_change", "acme_config_and_login_step1", (EventName in ("cfg_change", "login_ok")) and EventName=="login_ok", "acme_config_and_login_step2")
+| eval timebucket=date_trunc(10minutes, @timestamp) | stats event_type_count=count_distinct(event_type) by timebucket, username
+| where event_type_count >= 2

@@ -1,0 +1,203 @@
+# Synthetic, already-parsed, timed events for the example counter/sequence rules.
+# Expected alerting groups are Rosettalog's reading of the rules (assumptions R04-R08),
+# not observed on QRadar. Group keys: Field=value[,Field=value] in group-by order.
+reference_time: '2026-01-05T10:00:00Z'
+ground_truth_source: assumed
+events:
+- id: e1
+  time: '2026-01-05T10:01:00Z'
+  fields:
+    EventName: auth_fail
+    SourceIp: 192.0.2.20
+    UserName: u20
+- id: e2
+  time: '2026-01-05T10:02:00Z'
+  fields:
+    EventName: auth_fail
+    SourceIp: 192.0.2.20
+    UserName: u20
+- id: e3
+  time: '2026-01-05T10:03:00Z'
+  fields:
+    EventName: auth_fail
+    SourceIp: 192.0.2.20
+    UserName: u20
+- id: e4
+  time: '2026-01-05T10:03:30Z'
+  fields:
+    EventName: auth_fail
+    SourceIp: 192.0.2.21
+    UserName: u21
+- id: e5
+  time: '2026-01-05T10:04:30Z'
+  fields:
+    EventName: auth_fail
+    SourceIp: 192.0.2.21
+    UserName: u21
+- id: e6
+  time: '2026-01-05T10:05:30Z'
+  fields:
+    EventName: auth_fail
+    SourceIp: 192.0.2.21
+    UserName: u21
+- id: e7
+  time: '2026-01-05T10:01:10Z'
+  fields:
+    EventName: auth_fail
+    SourceIp: 192.0.2.22
+    UserName: u22
+- id: e8
+  time: '2026-01-05T10:02:10Z'
+  fields:
+    EventName: auth_fail
+    SourceIp: 192.0.2.22
+    UserName: u22
+- id: e9
+  time: '2026-01-05T10:00:05Z'
+  fields:
+    EventName: auth_fail
+    SourceIp: 192.0.2.23
+    UserName: u23
+- id: e10
+  time: '2026-01-05T10:04:00Z'
+  fields:
+    EventName: auth_fail
+    SourceIp: 192.0.2.23
+    UserName: u23
+- id: e11
+  time: '2026-01-05T10:09:30Z'
+  fields:
+    EventName: auth_fail
+    SourceIp: 192.0.2.23
+    UserName: u23
+- id: e12
+  time: '2026-01-05T10:20:00Z'
+  fields:
+    EventName: conn_denied
+    SourceIp: 192.0.2.30
+    DestinationPort: '22'
+- id: e13
+  time: '2026-01-05T10:20:10Z'
+  fields:
+    EventName: conn_denied
+    SourceIp: 192.0.2.30
+    DestinationPort: '23'
+- id: e14
+  time: '2026-01-05T10:20:20Z'
+  fields:
+    EventName: conn_denied
+    SourceIp: 192.0.2.30
+    DestinationPort: '25'
+- id: e15
+  time: '2026-01-05T10:21:00Z'
+  fields:
+    EventName: conn_denied
+    SourceIp: 192.0.2.31
+    DestinationPort: '22'
+- id: e16
+  time: '2026-01-05T10:21:10Z'
+  fields:
+    EventName: conn_denied
+    SourceIp: 192.0.2.31
+    DestinationPort: '22'
+- id: e17
+  time: '2026-01-05T10:21:20Z'
+  fields:
+    EventName: conn_denied
+    SourceIp: 192.0.2.31
+    DestinationPort: '22'
+- id: e18
+  time: '2026-01-05T10:30:00Z'
+  fields:
+    EventName: login_fail
+    SourceIp: 192.0.2.40
+    UserName: carol
+- id: e19
+  time: '2026-01-05T10:30:10Z'
+  fields:
+    EventName: conn_denied
+    SourceIp: 192.0.2.40
+    DestinationPort: '443'
+- id: e20
+  time: '2026-01-05T10:30:30Z'
+  fields:
+    EventName: login_ok
+    SourceIp: 192.0.2.40
+    UserName: carol
+- id: e21
+  time: '2026-01-05T10:31:00Z'
+  fields:
+    EventName: login_ok
+    SourceIp: 192.0.2.41
+    UserName: dave
+- id: e22
+  time: '2026-01-05T10:31:20Z'
+  fields:
+    EventName: login_fail
+    SourceIp: 192.0.2.41
+    UserName: dave
+- id: e23
+  time: '2026-01-05T10:32:00Z'
+  fields:
+    EventName: login_fail
+    SourceIp: 192.0.2.42
+    UserName: erin
+- id: e24
+  time: '2026-01-05T10:35:00Z'
+  fields:
+    EventName: login_ok
+    SourceIp: 192.0.2.42
+    UserName: erin
+- id: e25
+  time: '2026-01-05T10:40:00Z'
+  fields:
+    EventName: login_ok
+    SourceIp: 192.0.2.50
+    UserName: frank
+- id: e26
+  time: '2026-01-05T10:45:00Z'
+  fields:
+    EventName: cfg_change
+    SourceIp: 192.0.2.50
+    UserName: frank
+- id: e27
+  time: '2026-01-05T10:41:00Z'
+  fields:
+    EventName: cfg_change
+    SourceIp: 192.0.2.51
+    UserName: grace
+- id: e28
+  time: '2026-01-05T10:00:30Z'
+  fields:
+    EventName: login_ok
+    SourceIp: 192.0.2.52
+    UserName: heidi
+- id: e29
+  time: '2026-01-05T11:00:30Z'
+  fields:
+    EventName: cfg_change
+    SourceIp: 192.0.2.52
+    UserName: heidi
+- id: e30
+  time: '2026-01-05T10:58:00Z'
+  fields:
+    EventName: cfg_change
+    SourceIp: 192.0.2.53
+    UserName: ivan
+- id: e31
+  time: '2026-01-05T11:02:00Z'
+  fields:
+    EventName: login_ok
+    SourceIp: 192.0.2.53
+    UserName: ivan
+expected:
+  tessivor_vpn_bruteforce:
+  - SourceIp=192.0.2.20
+  - SourceIp=192.0.2.21
+  acme_port_scan:
+  - SourceIp=192.0.2.30
+  tessivor_fail_then_success:
+  - SourceIp=192.0.2.40,UserName=carol
+  acme_config_and_login:
+  - UserName=frank
+  - UserName=ivan

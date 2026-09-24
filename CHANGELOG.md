@@ -8,6 +8,25 @@ All notable changes to this project are documented here. The format follows
 
 No release has been tagged yet.
 
+### Added (M3b: counters and sequences)
+- IR `Counter` (event count, or distinct values) and `Sequence` (ordered/unordered steps) as
+  `DetectionSpec.stateful`.
+- Sigma correlation output: base rules plus an `event_count` / `value_count` / `temporal` /
+  `temporal_ordered` correlation in one multi-document `.yml`. Findings are linked to the new
+  assumptions R04-R08 (`SIGMA_COUNTER_WINDOW`, `SIGMA_COUNTER_GROUPING`, `SIGMA_SEQUENCE_GAPS`,
+  `SIGMA_SEQUENCE_WINDOW`).
+- Shared window semantics (`verify/emulators/windows.py`) for the IR evaluator and the Sigma
+  emulator. Rule verification compares alerting groups for stateful rules.
+- The pySigma EQL target. `PYSIGMA_CORRELATION_FIXED_WINDOW` for Splunk/ES|QL correlations.
+  `PYSIGMA_BACKEND_GAP` is scoped to the backend (`pysigma[<name>]`), so a refused conversion no
+  longer makes the Sigma rule UNSUPPORTED.
+- Real engines run correlations: Splunk (a timed JSON sourcetype, fresh default index, unmodified
+  query), ES|QL and EQL (`@timestamp`, group keys from result columns / `join_keys`).
+- Confirmation cases 04-08 (timed; `send.sh` honours `# sleep N` and stamps the current syslog
+  time). The `examples/rules-stateful/` example.
+- Observed downstream gaps G3-G8 (fixed buckets; EQL value_count/temporal_ordered/temporal,
+  numeric `:`, `regex~`), pinned in tests and documented.
+
 ### Added (M3a, in progress: rules → Sigma)
 - Detection IR (`Artifact(kind="detection")`, `DetectionSpec`, `And`/`Or`/`Not` over
   `FieldTest`, `LogSourceTest`, `QidTest`, `RuleRef`, `ReferenceTest`, `Opaque`).
@@ -29,7 +48,7 @@ No release has been tagged yet.
 - Broadened rules say so in the generated `.yml` (`description` note, `qradar.broader_than_source`,
   `qradar.dropped_tests`). Findings name the dropped test, and a dropped exclusion raises
   `SIGMA_EXCLUSION_DROPPED`.
-- Case-sensitive tests are written without `cased`, which every pinned pySigma backend refuses
+- Case-sensitive tests are written without `cased`, which the pinned Splunk, Kusto, Lucene and ES|QL pySigma backends refuse
   (`SIGMA_CASE_BROADENED`, linked to R01). Under NOT they are dropped instead, since dropping
   `cased` there would narrow the rule.
 - Rule assumption registry (`frontends/qradar_rules/assumptions.yaml`, R01-R03 for Q5) with QRadar

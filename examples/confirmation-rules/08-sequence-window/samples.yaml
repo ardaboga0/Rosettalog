@@ -1,0 +1,53 @@
+# Rule confirmation case 08: R08: how a sequence's window is measured
+# `events` are the lines of sample.log as parsed by ../rl-rules.lsx.xml (e1 = first line, ...).
+# `expected` encodes Rosettalog's CURRENT ASSUMPTION. After observing QRadar CE, record the
+# observed hits and set ground_truth_source to e.g. "observed on QRadar CE 7.5".
+reference_time: '2026-06-01T00:00:00Z'
+ground_truth_source: 'assumed: Rosettalog''s current interpretation; to be confirmed
+  on QRadar CE'
+events:
+- id: e1
+  time: '2026-06-01T00:00:00Z'
+  fields:
+    EventName: seq
+    UserName: stepa
+    SourceIp: 192.0.2.11
+    DestinationPort: '22'
+- id: e2
+  time: '2026-06-01T00:00:01Z'
+  fields:
+    EventName: seq
+    UserName: stepb
+    SourceIp: 192.0.2.11
+    DestinationPort: '22'
+- id: e3
+  time: '2026-06-01T00:00:02Z'
+  fields:
+    EventName: seq
+    UserName: stepc
+    SourceIp: 192.0.2.11
+    DestinationPort: '22'
+- id: e4
+  time: '2026-06-01T00:00:03Z'
+  fields:
+    EventName: seq
+    UserName: stepa
+    SourceIp: 192.0.2.10
+    DestinationPort: '22'
+- id: e5
+  time: '2026-06-01T00:00:43Z'
+  fields:
+    EventName: seq
+    UserName: stepb
+    SourceIp: 192.0.2.10
+    DestinationPort: '22'
+- id: e6
+  time: '2026-06-01T00:01:23Z'
+  fields:
+    EventName: seq
+    UserName: stepc
+    SourceIp: 192.0.2.10
+    DestinationPort: '22'
+expected:
+  rl_rules_08_sequence:
+  - SourceIp=192.0.2.11

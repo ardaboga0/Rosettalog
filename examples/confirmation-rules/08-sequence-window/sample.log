@@ -1,0 +1,8 @@
+<13>Mar 24 10:00:00 rl-rules-08 rltest: evt=seq user=stepa src=192.0.2.11 dport=22
+<13>Mar 24 10:00:00 rl-rules-08 rltest: evt=seq user=stepb src=192.0.2.11 dport=22
+<13>Mar 24 10:00:00 rl-rules-08 rltest: evt=seq user=stepc src=192.0.2.11 dport=22
+<13>Mar 24 10:00:00 rl-rules-08 rltest: evt=seq user=stepa src=192.0.2.10 dport=22
+# sleep 39
+<13>Mar 24 10:00:00 rl-rules-08 rltest: evt=seq user=stepb src=192.0.2.10 dport=22
+# sleep 39
+<13>Mar 24 10:00:00 rl-rules-08 rltest: evt=seq user=stepc src=192.0.2.10 dport=22

@@ -1,0 +1,4 @@
+<13>Mar 24 10:00:00 rl-rules-05 rltest: evt=fail user=a src=192.0.2.10 dport=22
+<13>Mar 24 10:00:00 rl-rules-05 rltest: evt=fail user=b src=192.0.2.10 dport=22
+<13>Mar 24 10:00:00 rl-rules-05 rltest: evt=fail user=a src=192.0.2.11 dport=22
+<13>Mar 24 10:00:00 rl-rules-05 rltest: evt=fail user=a src=192.0.2.10 dport=22

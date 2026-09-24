@@ -218,6 +218,32 @@ Cond = Annotated[
 Leaf = FieldTest | LogSourceTest | QidTest | RuleRef | ReferenceTest | Opaque
 
 
+class Counter(_Leaf):
+    """At least ``count`` events matching the rule's condition, with the same ``group_by`` values,
+    within ``window_s`` seconds. With ``distinct_field``: at least ``count`` different values of
+    that field (instead of events)."""
+
+    kind: Literal["counter"] = "counter"
+    count: int = Field(ge=1)
+    window_s: int = Field(ge=1)
+    group_by: list[str] = Field(default_factory=list)
+    distinct_field: str | None = None
+
+
+class Sequence(_Leaf):
+    """Events matching each step (and the rule's condition), with the same ``group_by`` values,
+    within ``window_s`` seconds; in the given order if ``ordered``."""
+
+    kind: Literal["sequence"] = "sequence"
+    steps: list[Cond] = Field(min_length=2)
+    ordered: bool = True
+    window_s: int = Field(ge=1)
+    group_by: list[str] = Field(default_factory=list)
+
+
+Stateful = Annotated[Counter | Sequence, Field(discriminator="kind")]
+
+
 class Response(_Leaf):
     """A response/action of the source rule (e.g. create an event, send an email)."""
 
@@ -234,6 +260,9 @@ class DetectionSpec(_Frozen):
     rule_type: str = "event"
     enabled: bool = True
     condition: Cond
+    """Single-event condition. With ``stateful``, the events that are counted/sequenced must
+    match it."""
+    stateful: Stateful | None = None
     severity: int | None = None
     """0-10 from the source rule's event response, when it has one."""
     credibility: int | None = None
@@ -256,6 +285,7 @@ class Artifact(_Frozen):
 And.model_rebuild()
 Or.model_rebuild()
 Not.model_rebuild()
+Sequence.model_rebuild()
 IfMatch.model_rebuild()
 Coalesce.model_rebuild()
 Lookup.model_rebuild()

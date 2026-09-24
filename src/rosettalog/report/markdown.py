@@ -88,11 +88,12 @@ def _verification(v: VerificationResult) -> list[str]:
 
 
 def _rule_verification(v: RuleVerificationResult) -> list[str]:
+    unit = "Event" if v.unit == "event" else "Alerting group"
     lines = [
         f"**Verification:** {len(v.events)} sample events. Ground truth: "
         f"{v.ground_truth or 'none'}.",
         "",
-        "| Event | " + " | ".join(_cell(r.name) for r in v.runs) + " | Expected |",
+        f"| {unit} | " + " | ".join(_cell(r.name) for r in v.runs) + " | Expected |",
         "|---" * (len(v.runs) + 2) + "|",
     ]
 
@@ -101,7 +102,7 @@ def _rule_verification(v: RuleVerificationResult) -> list[str]:
             return "n/a"
         return "match" if event in hits else "-"
 
-    for event in v.events:
+    for event in v.rows:
         cells = [mark(r.hits, event) for r in v.runs]
         cells.append(mark(v.expected, event) if v.expected is not None else "")
         lines.append(f"| {_cell(event)} | " + " | ".join(cells) + " |")
