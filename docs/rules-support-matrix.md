@@ -134,7 +134,8 @@ pipeline (`PYSIGMA_CONVERTED`); add your data model's pipeline for production.
 ### Known downstream gaps (observed)
 
 Every difference between a converted query on a real engine and the Sigma rule itself is pinned
-in `tests/real/test_rules_differential.py` and listed here.
+in `tests/real/test_rules_differential.py` and listed here. Upstream reports (drafts, existing
+issues, and filed issues) are tracked in [upstream/](upstream/README.md).
 
 | # | Backend | Construct | Observed | Evidence |
 |---|---|---|---|---|
