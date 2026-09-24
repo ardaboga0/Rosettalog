@@ -1,0 +1,25 @@
+[
+  {
+    "id": "rl_rules_02_regex",
+    "name": "rl-rules-02 regex",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/confirmation-rules/02-regex-find/rule.ir.json"
+    },
+    "detection": {
+      "rule_id": "rl_rules_02_regex",
+      "name": "rl-rules-02 regex",
+      "notes": "Confirmation case 02: Rosettalog's reading of the rule built in the QRadar UI (see README.md).",
+      "condition": {
+        "kind": "field",
+        "field": "UserName",
+        "op": "regex",
+        "values": [
+          "adm"
+        ],
+        "path": "test[1]"
+      }
+    }
+  }
+]

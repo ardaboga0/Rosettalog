@@ -53,24 +53,27 @@ def codes(result) -> list[str]:
     return [f.code for f in result.findings]
 
 
-def eq(field: str, *values: str, cs: bool = True) -> FieldTest:
-    return FieldTest(field=field, op="equals", values=list(values), case_sensitive=cs)
+def eq(field: str, *values: str, cs: bool = True, path: str = "") -> FieldTest:
+    return FieldTest(field=field, op="equals", values=list(values), case_sensitive=cs, path=path)
 
 
 def test_structure_is_preserved() -> None:
     cond = And(
         items=[
             eq("SourceIp", "192.0.2.1"),
-            Or(items=[eq("UserName", "a"), Not(item=eq("UserName", "b"))]),
+            Or(items=[eq("UserName", "a", cs=False), Not(item=eq("UserName", "b", cs=False))]),
         ]
     )
-    rule = rule_of(generate(cond))
+    result = generate(cond)
+    rule = rule_of(result)
     assert rule["detection"] == {
         "sel_1": {"src_ip": "192.0.2.1"},
-        "sel_2": {"username|cased": "a"},
-        "sel_3": {"username|cased": "b"},
+        "sel_2": {"username": "a"},
+        "sel_3": {"username": "b"},
         "condition": "sel_1 and (sel_2 or not sel_3)",
     }
+    assert not result.broadened
+    assert "broader_than_source" not in rule["qradar"]
 
 
 def test_cased_only_where_case_matters() -> None:
@@ -152,8 +155,8 @@ def test_untranslatable_regex_is_dropped_with_reason() -> None:
         items=[eq("UserName", "a"), FieldTest(field="EventName", op="regex", values=["(?<=a)b"])]
     )
     result = generate(cond)
-    assert codes(result)[:3] == [
-        "SIGMA_LEVEL_NOT_SET",
+    assert codes(result)[1:4] == [
+        "SIGMA_CASE_BROADENED",
         "SIGMA_REGEX_UNSUPPORTED",
         "SIGMA_TEST_DROPPED",
     ]
@@ -180,7 +183,7 @@ def test_logsource_map(tmp_path: Path) -> None:
     result = generate(cond, {"logsource_map": str(lsmap)})
     rule = rule_of(result)
     assert rule["logsource"] == {"category": "firewall", "product": "acme"}
-    assert rule["detection"] == {"sel_1": {"username|cased": "a"}, "condition": "sel_1"}
+    assert rule["detection"] == {"sel_1": {"username": "a"}, "condition": "sel_1"}
     assert "SIGMA_LOGSOURCE_MAPPED" in codes(result)
     assert "SIGMA_LOGSOURCE_UNMAPPED" not in codes(result)
 
@@ -230,7 +233,7 @@ def test_metadata_and_responses() -> None:
     rule = rule_of(result)
     assert rule["level"] == "high"
     assert rule["status"] == "experimental"
-    assert rule["description"] == "Synthetic."
+    assert rule["description"].startswith("Synthetic.\n\nRosettalog: this rule is BROADER")
     assert rule["qradar"]["enabled"] is False
     assert (rule["qradar"]["credibility"], rule["qradar"]["relevance"]) == (4, 5)
     assert {"SIGMA_LEVEL_MAPPED", "SIGMA_RULE_DISABLED", "SIGMA_RESPONSE_NOT_REPRESENTABLE"} <= set(
@@ -278,3 +281,59 @@ def test_pysigma_targets_produce_queries() -> None:
     assert {q.runner_target for q in result.queries} == {"splunk", "sentinel", "elastic"}
     files = {f.path: f.content for f in result.files}
     assert files["test_rule.kusto.kql"].strip() == 'username =~ "a"'
+
+
+def test_case_sensitive_test_is_broadened_not_refused() -> None:
+    result = generate(eq("UserName", "Admin"))
+    rule = rule_of(result)
+    assert rule["detection"]["sel_1"] == {"username": "Admin"}
+    [finding] = [f for f in result.findings if f.code == "SIGMA_CASE_BROADENED"]
+    assert finding.status is Status.PARTIAL
+    assert finding.depends_on is not None
+    assert finding.depends_on.topic == "rule-value-case"
+    assert result.broadened
+    assert rule["qradar"]["broader_than_source"] is True
+    assert rule["qradar"]["dropped_tests"][0]["case_insensitive"].startswith("equals test")
+
+
+def test_case_sensitive_exclusion_is_dropped_not_narrowed() -> None:
+    cond = And(
+        items=[eq("SourceIp", "192.0.2.1"), Not(item=eq("UserName", "Admin", path="test[2]"))]
+    )
+    result = generate(cond)
+    rule = rule_of(result)
+    # "not username: Admin" (case-insensitive) would also exclude "admin": narrower. Dropped.
+    assert rule["detection"]["condition"] == "sel_1"
+    assert "SIGMA_CASE_BROADENED" not in codes(result)
+    assert {"SIGMA_TEST_DROPPED", "SIGMA_EXCLUSION_DROPPED"} <= set(codes(result))
+    [entry] = rule["qradar"]["dropped_tests"]
+    assert (entry["test"], entry["exclusion"]) == ("test[2]", True)
+    assert "An exclusion was removed" in rule["description"]
+
+
+def test_dropped_test_is_named_in_finding_and_rule() -> None:
+    cond = And(
+        items=[eq("UserName", "a", cs=False), ReferenceTest(collection="Blocked", path="test[4]")]
+    )
+    result = generate(cond)
+    [finding] = [f for f in result.findings if f.code == "SIGMA_TEST_DROPPED"]
+    assert finding.message.startswith(
+        "Test test[4] was left out: Reference data test on 'Blocked'."
+    )
+    rule = rule_of(result)
+    assert "tests: test[4]" in rule["description"]
+    assert rule["qradar"]["dropped_tests"][0]["exclusion"] is False
+    assert "SIGMA_EXCLUSION_DROPPED" not in codes(result)
+
+
+def test_case_record_removed_when_its_test_is_absorbed() -> None:
+    # "Admin or <reference>" is always true once the reference test is dropped: no case note.
+    cond = And(
+        items=[
+            eq("SourceIp", "192.0.2.1"),
+            Or(items=[eq("UserName", "Admin"), ReferenceTest(collection="S")]),
+        ]
+    )
+    result = generate(cond)
+    assert "SIGMA_CASE_BROADENED" not in codes(result)
+    assert [e for e in rule_of(result)["qradar"]["dropped_tests"] if "case_insensitive" in e] == []

@@ -1,0 +1,48 @@
+[
+  {
+    "id": "rl_rules_01_equals",
+    "name": "rl-rules-01 equals",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/confirmation-rules/01-value-case/rule.ir.json"
+    },
+    "detection": {
+      "rule_id": "rl_rules_01_equals",
+      "name": "rl-rules-01 equals",
+      "notes": "Confirmation case 01: Rosettalog's reading of the rule built in the QRadar UI (see README.md).",
+      "condition": {
+        "kind": "field",
+        "field": "UserName",
+        "op": "equals",
+        "values": [
+          "Admin"
+        ],
+        "path": "test[1]"
+      }
+    }
+  },
+  {
+    "id": "rl_rules_01_contains",
+    "name": "rl-rules-01 contains",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/confirmation-rules/01-value-case/rule.ir.json"
+    },
+    "detection": {
+      "rule_id": "rl_rules_01_contains",
+      "name": "rl-rules-01 contains",
+      "notes": "Confirmation case 01: Rosettalog's reading of the rule built in the QRadar UI (see README.md).",
+      "condition": {
+        "kind": "field",
+        "field": "UserName",
+        "op": "contains",
+        "values": [
+          "adm"
+        ],
+        "path": "test[1]"
+      }
+    }
+  }
+]

@@ -45,7 +45,7 @@ class RuleVerificationResult(BaseModel):
     expected: list[str] | None = None
     runs: list[EngineRun] = Field(default_factory=list)
     dropped_tests: bool = False
-    """The generated rule leaves out source tests on purpose (it is broader)."""
+    """The generated rule is broader than the source on purpose (dropped tests, letter case)."""
 
     def run(self, kind: str) -> EngineRun | None:
         return next((r for r in self.runs if r.kind == kind), None)
@@ -103,7 +103,7 @@ class RuleVerificationResult(BaseModel):
         if emulator and emulator.hits is not None and set(emulator.hits) != set(reference):
             broader = set(emulator.hits) >= set(reference)
             note = (
-                " This is expected: tests Sigma cannot express were left out (SIGMA_TEST_DROPPED)."
+                " This is expected: the generated rule is intentionally broader (see its findings)."
                 if broader and self.dropped_tests
                 else " The generated rule misses events the source rule matches: a Rosettalog "
                 "bug unless a finding explains it."
@@ -184,7 +184,7 @@ def verify_rule(
         events=ids,
         ground_truth=samples.ground_truth_source,
         expected=samples.expected_for(artifact.id, artifact.detection.name),
-        dropped_tests=any(f.code == "SIGMA_TEST_DROPPED" for f in result.findings),
+        dropped_tests=result.broadened,
     )
     source = EngineRun(name="source (IR evaluator)", kind="source")
     evaluator = RuleEvaluator(artifact.detection.condition, reference_data=samples.reference_data)

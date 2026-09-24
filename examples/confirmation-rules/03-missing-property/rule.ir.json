@@ -1,0 +1,42 @@
+[
+  {
+    "id": "rl_rules_03_not_bob",
+    "name": "rl-rules-03 not bob",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {
+      "file": "examples/confirmation-rules/03-missing-property/rule.ir.json"
+    },
+    "detection": {
+      "rule_id": "rl_rules_03_not_bob",
+      "name": "rl-rules-03 not bob",
+      "notes": "Confirmation case 03: Rosettalog's reading of the rule built in the QRadar UI (see README.md).",
+      "condition": {
+        "kind": "and",
+        "items": [
+          {
+            "kind": "field",
+            "field": "SourceIp",
+            "op": "equals",
+            "values": [
+              "192.0.2.10"
+            ],
+            "path": "test[1]"
+          },
+          {
+            "kind": "not",
+            "item": {
+              "kind": "field",
+              "field": "UserName",
+              "op": "equals",
+              "values": [
+                "bob"
+              ],
+              "path": "test[2]"
+            }
+          }
+        ]
+      }
+    }
+  }
+]

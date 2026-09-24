@@ -93,6 +93,8 @@ class BackendResult(BaseModel):
     queries: list[TargetQuery] = Field(default_factory=list)
     """Detection output: queries real engines can run during verification."""
     output_kind: Literal["parser", "detection"] = "parser"
+    broadened: bool = False
+    """Detection output intentionally matches a superset of the source rule's events."""
     """A parser is only usable if it produces fields; a detection rule may test none."""
 
     @property

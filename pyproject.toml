@@ -46,6 +46,7 @@ rosettalog = "rosettalog.cli:app"
 [project.entry-points."rosettalog.frontends"]
 qradar-lsx = "rosettalog.frontends.qradar_lsx:QRadarLsxFrontend"
 rosettalog-ir = "rosettalog.frontends.ir_json:IrJsonFrontend"
+qradar-rules = "rosettalog.frontends.qradar_rules:QRadarRulesFrontend"
 
 [project.entry-points."rosettalog.backends"]
 sentinel = "rosettalog.backends.sentinel:SentinelBackend"

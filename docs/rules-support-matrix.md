@@ -18,8 +18,9 @@ construct or changes its meaning, that is reported as a gap in the downstream to
 
 | IR test | Sigma | Status |
 |---|---|---|
-| Field equals one of values | `field: [values]`, wildcards escaped; `\|cased` for case-sensitive tests whose values contain letters; integers written as numbers | FULL |
-| Field contains | `field\|contains` (+ `\|cased`) | FULL |
+| Field equals one of values | `field: [values]`, wildcards escaped; integers written as numbers | FULL |
+| Field contains | `field\|contains` | FULL |
+| Case-sensitive equals/contains (values with letters) | written **without** `\|cased` (every pinned pySigma backend refuses it, G0): broader. Under NOT that would narrow the rule, so the test is dropped there instead | PARTIAL (`SIGMA_CASE_BROADENED`, linked to R01; or `SIGMA_TEST_DROPPED` + `SIGMA_EXCLUSION_DROPPED`) |
 | Field matches regex (Java) | `field\|re` in the Sigma regex subset (below), flags as `\|i \|m \|s` | FULL, PARTIAL or UNSUPPORTED per construct |
 | AND / OR / NOT | one search identifier per test; the condition keeps the source's structure | FULL |
 | Log source / log source type | the Sigma `logsource`, **only** from a `sigma.logsource_map` you provide; otherwise kept as a test on `LogSource`/`LogSourceType` | FULL (mapped) / PARTIAL |
@@ -33,6 +34,13 @@ construct or changes its meaning, that is reported as a gap in the downstream to
 where it counts positively and as *false* under a negation. The Sigma rule may therefore raise
 more alerts than the source rule, but it never misses an event the source rule would catch. If
 nothing is left, no rule is written (`SIGMA_CONDITION_EMPTY`).
+
+A broadened rule says so **in the rule file itself**, for users who deploy the `.yml` without
+reading the report. Its `description` ends with a "Rosettalog: this rule is BROADER…" note, and
+the `qradar:` block has `broader_than_source: true` and `dropped_tests` (each entry has the test
+path, what was dropped or made case-insensitive, and whether it was an exclusion). A dropped
+exclusion (a test under NOT) also raises `SIGMA_EXCLUSION_DROPPED`: the rule may alert far more
+often than the original.
 
 ### Regex subset
 
@@ -90,6 +98,21 @@ exists (`src_ip`, `src_port`, `dst_ip`, `dst_port`, `username`;
 [taxonomy](https://github.com/SigmaHQ/sigma-specification/blob/main/specification/sigma-appendix-taxonomy.md)).
 Every other field keeps its name (`FIELD_UNMAPPED`). Map it in your pySigma processing pipeline.
 
+## Assumed rule behaviours (awaiting QRadar CE confirmation)
+
+Where IBM's documentation leaves rule semantics open, Rosettalog states what it currently does.
+Each assumption has a confirmation case in
+[`examples/confirmation-rules/`](../examples/confirmation-rules/README.md). Q1-Q4 (the rule XML
+encoding) are not assumptions: the rule-export parser waits for them.
+
+<!-- BEGIN GENERATED: rule-assumptions (from src/rosettalog/frontends/qradar_rules/assumptions.yaml; regenerate with `uv run python -m rosettalog.frontends.qradar_rules.docs_sync`) -->
+| ID | Question | Current assumption | Scope / finding | Case | Status |
+|---|---|---|---|---|---|
+| R01 | Are event-property "equals" and "contains" tests case-sensitive? | Yes, unless the test is marked case-insensitive. Sigma output is written case-insensitively anyway (pySigma backends refuse 'cased'), which makes such rules broader. | per artifact: `SIGMA_CASE_BROADENED` | [01](../examples/confirmation-rules/01-value-case) | unconfirmed |
+| R02 | Does a "matches regex" test match anywhere in the value, or must it match the whole value? | Anywhere in the value (java.util.regex find semantics), like LSX patterns. | global: listed in every report while not confirmed | [02](../examples/confirmation-rules/02-regex-find) | unconfirmed |
+| R03 | How does a test on a property the event does not have evaluate, and its negation? | The test is false, so its negation is true: an event without a username matches "NOT username equals bob". | global: listed in every report while not confirmed | [03](../examples/confirmation-rules/03-missing-property) | unconfirmed |
+<!-- END GENERATED: rule-assumptions -->
+
 ## pySigma backends (pinned)
 
 `pip install 'rosettalog[sigma-backends]'` installs `pysigma==1.5.1`,
@@ -115,7 +138,7 @@ in `tests/real/test_rules_differential.py` and listed here.
 
 | # | Backend | Construct | Observed | Evidence |
 |---|---|---|---|---|
-| G0 | all four (splunk 2.1.0, kusto 1.0.1, elasticsearch 2.1.1) | `\|cased` | conversion refused: "Case-sensitive string matching is not supported by backend" (`PYSIGMA_BACKEND_GAP`) | `tests/unit/test_pysigma_gaps.py` |
+| G0 | all four (splunk 2.1.0, kusto 1.0.1, elasticsearch 2.1.1) | `\|cased` | conversion refused: "Case-sensitive string matching is not supported by backend". Rosettalog therefore does not emit `cased` (see above) | `tests/unit/test_pysigma_gaps.py` |
 | G1 | elasticsearch 2.1.1 (lucene, esql) | plain/`contains` values (case-insensitive in Sigma) | matched case-sensitively on keyword fields: `username\|contains: adm` misses `SysADM` | Elasticsearch 9.5.4, `examples/rules` e3 |
 | G2 | elasticsearch 2.1.1 (lucene, esql) | `\|re` with `^`/`$` | passed through unchanged, but Lucene regular expressions have no anchors and always match the whole value ([regexp syntax](https://www.elastic.co/docs/reference/query-languages/query-dsl/regexp-syntax)): `/^auth.../` matches nothing | Elasticsearch 9.5.4, `examples/rules` e4, e7 |
 

@@ -1,0 +1,4 @@
+<13>Mar 24 10:00:00 rl-rules-01 rltest: evt=login user=Admin src=192.0.2.10 dport=443
+<13>Mar 24 10:00:00 rl-rules-01 rltest: evt=login user=admin src=192.0.2.10 dport=443
+<13>Mar 24 10:00:00 rl-rules-01 rltest: evt=login user=ADMIN src=192.0.2.10 dport=443
+<13>Mar 24 10:00:00 rl-rules-01 rltest: evt=login user=xAdminx src=192.0.2.10 dport=443

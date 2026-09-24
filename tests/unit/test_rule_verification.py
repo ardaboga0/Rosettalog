@@ -133,8 +133,7 @@ def test_rule_examples(samples_path: Path, rules_path: Path) -> None:
         assert source is not None
         assert emulator is not None
         assert set(source.hits or []) == set(rv.expected or []), entry.name
-        dropped = any(f.code == "SIGMA_TEST_DROPPED" for f in tr.findings)
-        if dropped:  # the rule may only be broader, never miss an event
+        if rv.dropped_tests:  # the rule may only be broader, never miss an event
             assert set(emulator.hits or []) >= set(source.hits or []), entry.name
         else:
             assert emulator.hits == source.hits, entry.name

@@ -26,6 +26,16 @@ No release has been tagged yet.
 - `rosettalog-ir` frontend (`*.ir.json`), the `examples/rules/` synthetic example, the
   `tests/real/test_rules_differential.py` differential suite, and CI jobs for `sigma check`
   and for running without the extras.
+- Broadened rules say so in the generated `.yml` (`description` note, `qradar.broader_than_source`,
+  `qradar.dropped_tests`). Findings name the dropped test, and a dropped exclusion raises
+  `SIGMA_EXCLUSION_DROPPED`.
+- Case-sensitive tests are written without `cased`, which every pinned pySigma backend refuses
+  (`SIGMA_CASE_BROADENED`, linked to R01). Under NOT they are dropped instead, since dropping
+  `cased` there would narrow the rule.
+- Rule assumption registry (`frontends/qradar_rules/assumptions.yaml`, R01-R03 for Q5) with QRadar
+  CE confirmation cases in `examples/confirmation-rules/`. The `qradar-rules` frontend provides
+  the registry; its export parser is still pending.
+- `BackendResult.broadened` (generic), so the rule harness no longer checks a Sigma finding code.
 - `docs/rules-support-matrix.md`, including the observed pySigma gaps: G0 `|cased` refused by all
   backends; G1/G2 Elasticsearch case-sensitivity and regex anchors, seen on Elasticsearch 9.5.4.
 

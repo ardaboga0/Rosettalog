@@ -33,6 +33,7 @@ from rosettalog.errors import InputError
 from rosettalog.ir import (
     And,
     Artifact,
+    AssumptionDependency,
     Cond,
     DetectionSpec,
     FieldTest,
@@ -45,6 +46,7 @@ from rosettalog.ir import (
     ReferenceTest,
     RuleRef,
     Status,
+    Variant,
     leaves,
 )
 from rosettalog.ir.fields import resolve_names
@@ -58,6 +60,8 @@ TITLE_MAX = 256
 #: Pseudo-fields used when a QRadar-specific condition is kept in the detection.
 LOG_SOURCE_FIELD = {"log_source": "LogSource", "log_source_type": "LogSourceType"}
 QID_FIELD = "QID"
+#: Assumption topic: are QRadar equals/contains tests case-sensitive? (rule registry, R01)
+CASE_TOPIC = "rule-value-case"
 
 #: QRadar severity (0-10) -> Sigma level. A Rosettalog convention, not an IBM mapping; see
 #: docs/rules-support-matrix.md.
@@ -146,6 +150,18 @@ class _Builder:
     selections: list[tuple[str | None, str, list[str]]] = field(default_factory=list)
     """(canonical field or None for pseudo-fields, field name + modifiers, values)."""
     logsource: dict[str, str] | None = None
+    broadened: list[dict[str, object]] = field(default_factory=list)
+    """Every place where the Sigma rule matches more than the source rule (also written into
+    the rule itself, for users who never read the report)."""
+    case_entries: dict[int, dict[str, object]] = field(default_factory=dict)
+    case_findings: dict[int, int] = field(default_factory=dict)
+    """Case-broadened selections (index -> entry / finding position); kept only if used."""
+
+    def finish_case(self, used: list[int]) -> None:
+        """Keep case-broadening records only for selections the final rule still contains."""
+        drop = {pos for sel, pos in self.case_findings.items() if sel not in used}
+        self.findings = [f for i, f in enumerate(self.findings) if i not in drop]
+        self.broadened += [e for sel, e in sorted(self.case_entries.items()) if sel in used]
 
     def finding(self, status: Status, code: str, path: str, message: str, **kw: str) -> None:
         self.findings.append(
@@ -203,14 +219,25 @@ class _Builder:
         return self.leaf(cond, positive)
 
     def drop(self, path: str, what: str, positive: bool, *, suggestion: str) -> _True | _False:
+        where = f"Test {path}" if path else "A test"
         self.finding(
             Status.PARTIAL,
             "SIGMA_TEST_DROPPED",
             path,
-            f"{what} Sigma cannot express it, so it was left out; the Sigma rule therefore "
-            "matches more events than the source rule (it never misses one).",
+            f"{where} was left out: {what} Sigma cannot express it, so the Sigma rule matches "
+            "more events than the source rule (it never misses one).",
             suggestion=suggestion,
         )
+        self.broadened.append({"test": path or "?", "dropped": what, "exclusion": not positive})
+        if not positive:
+            self.finding(
+                Status.PARTIAL,
+                "SIGMA_EXCLUSION_DROPPED",
+                path,
+                f"{where} was an exclusion (it sits under NOT): without it, every event it "
+                "excluded now matches, so the rule may alert far more often than the original.",
+                suggestion="Re-add the exclusion on the target by hand before enabling the rule.",
+            )
         return TRUE if positive else FALSE
 
     def leaf(self, cond: Cond, positive: bool) -> Approx:
@@ -267,16 +294,26 @@ class _Builder:
         raise AssertionError(cond)  # pragma: no cover
 
     def field_test(self, test: FieldTest, positive: bool) -> Approx:
-        # Case only matters for values with cased characters; "|cased" on "22" would be a no-op
-        # that pySigma backends nevertheless refuse.
-        has_case = any(v.lower() != v.upper() for v in test.values)
-        cased = "|cased" if test.case_sensitive and has_case and test.op != "regex" else ""
-        if test.op == "equals":
-            values = [escape_value(v) for v in test.values]
-            return self.add_selection(test.field, cased, values)
-        if test.op == "contains":
-            values = [escape_value(v) for v in test.values]
-            return self.add_selection(test.field, "|contains" + cased, values)
+        if test.op in ("equals", "contains"):
+            # Case only matters for values with cased characters (not for "22").
+            has_case = any(v.lower() != v.upper() for v in test.values)
+            # Every pinned pySigma backend refuses Sigma's "cased" (G0), so a case-sensitive
+            # test is written case-insensitively. That broadens it where it counts positively;
+            # under NOT it would narrow the rule, so the test is dropped there.
+            if test.case_sensitive and has_case and not positive:
+                return self.drop(
+                    test.path,
+                    f"case-sensitive {test.op} test on '{test.field}' "
+                    f"({', '.join(test.values)}) inside an exclusion; a case-insensitive "
+                    "exclusion would also exclude other letter cases.",
+                    positive,
+                    suggestion="Add the case-sensitive exclusion on the target by hand.",
+                )
+            mods = "|contains" if test.op == "contains" else ""
+            ref = self.add_selection(test.field, mods, [escape_value(v) for v in test.values])
+            if test.case_sensitive and has_case:
+                self.case_broadened(test, len(self.selections) - 1)
+            return ref
         # regex: every value translated separately; values with the same flags share a selection
         by_flags: dict[str, list[str]] = {}
         for value in test.values:
@@ -297,6 +334,43 @@ class _Builder:
             mods = "|re" + "".join(f"|{f}" for f in flags)
             parts.append(self.add_selection(test.field, mods, patterns))
         return parts[0] if len(parts) == 1 else Or(items=parts)
+
+    def case_broadened(self, test: FieldTest, selection: int) -> None:
+        values = ", ".join(test.values)
+        what = f"{test.op} test on '{test.field}' ({values})"
+        written = (
+            "is written without Sigma's 'cased' modifier (every pinned pySigma backend refuses "
+            "it), so it also matches other letter cases: the rule is broader."
+        )
+        self.case_findings[selection] = len(self.findings)
+        self.findings.append(
+            Finding(
+                status=Status.PARTIAL,
+                code="SIGMA_CASE_BROADENED",
+                path=test.path,
+                message=f"The {what} {written}",
+                suggestion="Add a case-sensitive check on the target if the letter case matters.",
+                target=NAME,
+                depends_on=AssumptionDependency(
+                    topic=CASE_TOPIC,
+                    unconfirmed=Variant(
+                        status=Status.PARTIAL,
+                        message=f"The {what} is assumed to be case-sensitive in QRadar; it "
+                        f"{written}",
+                    ),
+                    confirmed=Variant(
+                        status=Status.PARTIAL,
+                        message=f"The {what} is case-sensitive in QRadar; it {written}",
+                    ),
+                    refuted=Variant(
+                        status=Status.FULL,
+                        message=f"The {what} is case-insensitive in QRadar, so writing it "
+                        "without 'cased' is exact.",
+                    ),
+                ),
+            )
+        )
+        self.case_entries[selection] = {"test": test.path or "?", "case_insensitive": what}
 
     def add_selection(self, fieldname: str | None, key: str, values: list[str]) -> Cond:
         """Register a selection; returns a placeholder leaf that refers to it by index.
@@ -401,6 +475,7 @@ class SigmaBackend:
                 target=NAME, artifact_id=artifact.id, findings=b.findings, output_kind="detection"
             )
         used = list(dict.fromkeys(b.used(approx)))
+        b.finish_case(used)
         canonical = [b.selections[i][0] for i in used]
         naming = resolve_names(
             list(dict.fromkeys(f for f in canonical if f is not None)), "sigma", target=NAME
@@ -424,7 +499,9 @@ class SigmaBackend:
             )
         logsource = b.logsource or {"product": "qradar"}
         condition = render_condition(approx, keys)
-        rule = self._rule(artifact, spec, logsource, selections, condition=condition)
+        rule = self._rule(
+            artifact, spec, logsource, selections, condition=condition, broadened=b.broadened
+        )
         text = dump_yaml(rule)
         files = [GeneratedFile(path=f"{artifact.id}.yml", content=text)]
         check = pysigma.check_and_convert(text, options.get("pysigma_targets", ""), artifact.id)
@@ -440,6 +517,7 @@ class SigmaBackend:
             options=dict(options),
             queries=check.queries,
             output_kind="detection",
+            broadened=bool(b.broadened),
         )
 
     @staticmethod
@@ -450,12 +528,23 @@ class SigmaBackend:
         selections: dict[str, dict[str, list[str]]],
         *,
         condition: str,
+        broadened: list[dict[str, object]],
     ) -> dict[str, object]:
         rule: dict[str, object] = {"title": spec.name[:TITLE_MAX], "id": rule_uuid(spec)}
         rule["name"] = artifact.id
         rule["status"] = "experimental"
-        if spec.notes.strip():
-            rule["description"] = spec.notes.strip()
+        description = spec.notes.strip()
+        if broadened:
+            tests = ", ".join(str(e["test"]) for e in broadened)
+            note = (
+                f"Rosettalog: this rule is BROADER than the source QRadar rule (tests: {tests}); "
+                "it may match events the original does not. See qradar.dropped_tests."
+            )
+            if any(e.get("exclusion") for e in broadened):
+                note += " An exclusion was removed: expect many more alerts."
+            description = f"{description}\n\n{note}" if description else note
+        if description:
+            rule["description"] = description
         rule["logsource"] = logsource
         detection: dict[str, object] = {
             key: {k: _values(k, v) for k, v in sel.items()} for key, sel in selections.items()
@@ -474,6 +563,9 @@ class SigmaBackend:
             value = getattr(spec, key)
             if value is not None:
                 qradar[key] = value
+        if broadened:
+            qradar["broader_than_source"] = True
+            qradar["dropped_tests"] = broadened
         rule["qradar"] = qradar
         return rule
 
