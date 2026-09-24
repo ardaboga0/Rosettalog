@@ -8,6 +8,16 @@ All notable changes to this project are documented here. The format follows
 
 No release has been tagged yet.
 
+### Open
+- **QRadar rule-export parser** (M3 follow-up, its own PR). It is blocked on QRadar CE answers to
+  Q1-Q5: the test-parameter encoding in the rule XML, test class names, how references are
+  stored, the boolean structure, and value semantics. Until then, rules are read from Rosettalog
+  IR (`*.ir.json`, see `docs/rules-ir-format.md`).
+
+### Added (IR format for hand-written rules)
+- `docs/rules-ir-format.md`: the `*.ir.json` format with tested examples, and
+  `rosettalog schema --ir` (JSON Schema for editor validation).
+
 ### Added (M3c: building blocks and reference data)
 - Rule references are resolved when loading (`ir/references.py`), by rule id, uuid or name
   (Q3 is open). Missing, ambiguous and cyclic references are reported (`RULE_REF_*`); a cycle

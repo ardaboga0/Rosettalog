@@ -4,7 +4,7 @@
 
 ---
 
-**Title:** `|re`: `^`/`$` are passed through, but Elasticsearch regexps treat them as literal characters (Lucene, ES|QL)
+**Title:** `|re`: `^`/`$` are passed through, but Elasticsearch regexps treat them as literal characters (Lucene, ES|QL, EQL)
 
 **Body:**
 
@@ -46,6 +46,10 @@
 > | `auth_fail[0-9]*` without anchors (Lucene and ES\|QL) | – | d1 (whole-value match; d2 not matched) |
 >
 > Lucene was run as a `query_string` query on the index.
+>
+> **EQL** has the same root cause: the EQL backend's `regex~` also has to match the whole value.
+> With `user|re: 'adm'` (`any where user regex~ "adm"`), `sysadmin` is not matched, while the
+> Sigma rule matches it. (That `regex~` is also case-insensitive is a separate issue.)
 >
 > **Possible fix:** remove a leading `^` / trailing `$`, and wrap unanchored ends in `.*`
 > (e.g. `abc` → `.*abc.*`, `^abc` → `abc.*`). This needs care with escaped `\^`/`\$` and with

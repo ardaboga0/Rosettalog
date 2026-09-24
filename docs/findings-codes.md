@@ -187,8 +187,8 @@ its version; a gap is a limitation of the downstream tool.
 | Code | Status | Meaning |
 |---|---|---|
 | `PYSIGMA_CONVERTED` | FULL | The rule was converted by the named pySigma backend without a processing pipeline, so field names are the Sigma rule's. |
-| `PYSIGMA_CORRELATION_FIXED_WINDOW` | PARTIAL | The named backend converts a correlation into fixed time buckets (Splunk `bin _time span=`, ES\|QL `date_trunc`), not Sigma's sliding window, so it can miss events that fall into two neighbouring buckets (G3). |
-| `PYSIGMA_BACKEND_GAP` | UNSUPPORTED | The pySigma backend refused the rule (e.g. "Case-sensitive string matching is not supported by backend") or returned nothing. |
+| `PYSIGMA_CORRELATION_FIXED_WINDOW` | PARTIAL | The named backend converts a correlation into fixed time buckets (Splunk `bin _time span=`, ES\|QL `date_trunc`), not Sigma's sliding window, so it can miss events that fall into two neighbouring buckets (G3). The Sigma spec tolerates this restriction but says backends "should issue a warning"; pySigma does not, so Rosettalog does. Upstream: [pySigma-backend-elasticsearch#182](https://github.com/SigmaHQ/pySigma-backend-elasticsearch/issues/182) (ES\|QL). |
+| `PYSIGMA_BACKEND_GAP` | UNSUPPORTED | The pySigma backend refused the rule (e.g. "Case-sensitive string matching is not supported by backend") or returned nothing. Known gaps and their upstream issues are listed in [rules-support-matrix.md](rules-support-matrix.md#known-downstream-gaps-observed). |
 
 ## Verification
 

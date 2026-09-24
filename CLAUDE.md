@@ -17,7 +17,11 @@ core value is migrating *parsing logic* with honest findings and field-level ver
 - M2 (AQL): only an integration point plus an optional adapter to an external translator, whose
   output and gaps become findings.
 - M3 (rules/building blocks): IR detection model → Sigma only; target queries come from pySigma.
-- M3 is in progress (approved). M2 has not been started and needs the maintainer's approval.
+- M3 (rules → Sigma) is merged, on IR input (`*.ir.json`, documented in
+  `docs/rules-ir-format.md`). **Open item:** the QRadar rule-export parser. It waits for QRadar
+  CE answers to Q1-Q5 (`docs/rules-support-matrix.md`). Do not guess the rule XML encoding;
+  build the parser as its own PR from a real CE export. M2 has not been started and needs the
+  maintainer's approval.
 - **pySigma boundary:** only `backends/sigma/pysigma.py` talks to pySigma. Never post-process
   or "fix" pySigma output. A refused construct is `PYSIGMA_BACKEND_GAP`; a query that does not
   mean what the Sigma rule means (seen on a real engine) is `VERIFY_RULE_DOWNSTREAM_GAP`. Pin

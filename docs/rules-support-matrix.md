@@ -11,8 +11,9 @@ construct or changes its meaning, that is reported as a gap in the downstream to
 > conversion, and rule verification (IR evaluator, Sigma emulator, real engines) are
 > implemented. The **QRadar rule export parser is not yet implemented**. IBM publishes no schema
 > for the rule XML inside content-management exports, and its test-parameter encoding must be
-> confirmed first. Until then, detection artifacts are read from Rosettalog IR
-> (`*.ir.json`, e.g. [`examples/rules/`](../examples/rules/)).
+> confirmed first (Q1-Q5 below). Until then, detection artifacts are read from Rosettalog IR
+> (`*.ir.json`), documented for hand-written rules in [rules-ir-format.md](rules-ir-format.md);
+> see also [`examples/rules/`](../examples/rules/).
 
 ## Rule tests (IR) → Sigma
 
@@ -153,18 +154,18 @@ Every difference between a converted query on a real engine and the Sigma rule i
 in `tests/real/test_rules_differential.py` and listed here. Upstream reports (drafts, existing
 issues, and filed issues) are tracked in [upstream/](upstream/README.md).
 
-| # | Backend | Construct | Observed | Evidence |
-|---|---|---|---|---|
-| G0 | splunk 2.1.0, kusto 1.0.1, elasticsearch 2.1.1 (lucene, esql; **not** eql) | `\|cased` | conversion refused: "Case-sensitive string matching is not supported by backend". Rosettalog therefore does not emit `cased` (see above) | `tests/unit/test_pysigma_gaps.py` |
-| G1 | elasticsearch 2.1.1 (lucene, esql) | plain/`contains` values (case-insensitive in Sigma) | matched case-sensitively on keyword fields: `username\|contains: adm` misses `SysADM` | Elasticsearch 9.5.4, `examples/rules` e3 |
-| G2 | elasticsearch 2.1.1 (lucene, esql) | `\|re` with `^`/`$` | passed through unchanged, but Lucene regular expressions have no anchors and always match the whole value ([regexp syntax](https://www.elastic.co/docs/reference/query-languages/query-dsl/regexp-syntax)): `/^auth.../` matches nothing | Elasticsearch 9.5.4, `examples/rules` e4, e7 |
+| # | Backend | Construct | Observed | Evidence | Upstream |
+|---|---|---|---|---|---|
+| G0 | splunk 2.1.0, kusto 1.0.1, elasticsearch 2.1.1 (lucene, esql; **not** eql) | `\|cased` | conversion refused: "Case-sensitive string matching is not supported by backend". Rosettalog therefore does not emit `cased` (see above) | `tests/unit/test_pysigma_gaps.py` | – |
+| G1 | elasticsearch 2.1.1 (lucene, esql) | plain/`contains` values (case-insensitive in Sigma) | matched case-sensitively on keyword fields: `username\|contains: adm` misses `SysADM` | Elasticsearch 9.5.4, `examples/rules` e3 | ES\|QL: [#107](https://github.com/SigmaHQ/pySigma-backend-elasticsearch/issues/107); Lucene: see #21/#178, draft in [upstream/](upstream/g1-case-insensitivity.md) |
+| G2 | elasticsearch 2.1.1 (lucene, esql) | `\|re` with `^`/`$` | passed through unchanged, but Lucene regular expressions have no anchors and always match the whole value ([regexp syntax](https://www.elastic.co/docs/reference/query-languages/query-dsl/regexp-syntax)): `/^auth.../` matches nothing | Elasticsearch 9.5.4, `examples/rules` e4, e7 | draft: [upstream/g2-regex-anchors.md](upstream/g2-regex-anchors.md) |
 
-| G3 | splunk 2.1.0, elasticsearch 2.1.1 (esql) | correlations | fixed time buckets (`bin _time span=`, `date_trunc`) instead of a sliding window: groups whose events straddle a bucket boundary are missed | Splunk 10.4.3 and Elasticsearch 9.5.4, `examples/rules-stateful` (192.0.2.21, ivan) |
-| G4 | elasticsearch 2.1.1 (eql) | `value_count` | `[...] by <field> with runs=N`: N events with the **same** value, not N distinct values | Elasticsearch 9.5.4, `examples/rules-stateful` (alerts on .31, misses .30) |
-| G5 | elasticsearch 2.1.1 (eql) | `temporal_ordered` | `... by  with runs=2`: invalid EQL, rejected with a parse error | Elasticsearch 9.5.4, `examples/rules-stateful`, cases 07/08 |
-| G6 | elasticsearch 2.1.1 (eql) | `temporal` | `sample by ...` without `maxspan`: the timespan is ignored | Elasticsearch 9.5.4, `examples/rules-stateful` (alerts on heidi, an hour apart) |
-| G7 | elasticsearch 2.1.1 (eql) | numeric values | `field:22`; Elasticsearch rejects `:` on numeric fields ("consider using [==] instead") | Elasticsearch 9.5.4, `examples/rules` (dst_port, QID) |
-| G8 | elasticsearch 2.1.1 (eql) | `\|re` | rendered with `regex~`, EQL's case-insensitive regex operator (Sigma regexes are case-sensitive); whole-value like G2 | Elasticsearch 9.5.4, case 02 (matches `ADM`, misses `sysadmin`) |
+| G3 | splunk 2.1.0, elasticsearch 2.1.1 (esql) | correlations | fixed time buckets (`bin _time span=`, `date_trunc`) instead of a sliding window. The Sigma spec tolerates this but asks the backend to warn; pySigma does not, so Rosettalog reports `PYSIGMA_CORRELATION_FIXED_WINDOW`: groups whose events straddle a bucket boundary are missed | Splunk 10.4.3 and Elasticsearch 9.5.4, `examples/rules-stateful` (192.0.2.21, ivan) | ES\|QL: [#182](https://github.com/SigmaHQ/pySigma-backend-elasticsearch/issues/182) (tolerated by the spec's [Compatibility](https://github.com/SigmaHQ/sigma-specification/blob/main/specification/sigma-correlation-rules-specification.md#compatibility) section; backends "should issue a warning"); Splunk: draft [upstream/g3-splunk-fixed-window.md](upstream/g3-splunk-fixed-window.md) |
+| G4 | elasticsearch 2.1.1 (eql) | `value_count` | `[...] by <field> with runs=N`: N events with the **same** value, not N distinct values | Elasticsearch 9.5.4, `examples/rules-stateful` (alerts on .31, misses .30) | [#218](https://github.com/SigmaHQ/pySigma-backend-elasticsearch/issues/218), fixed by [#219](https://github.com/SigmaHQ/pySigma-backend-elasticsearch/pull/219) after 2.1.1 (not released yet) |
+| G5 | elasticsearch 2.1.1 (eql) | `temporal_ordered` | `... by  with runs=2`: invalid EQL, rejected with a parse error | Elasticsearch 9.5.4, `examples/rules-stateful`, cases 07/08 | draft: [upstream/g5-g6-eql-temporal.md](upstream/g5-g6-eql-temporal.md) |
+| G6 | elasticsearch 2.1.1 (eql) | `temporal` | `sample by ...` without `maxspan`: the timespan is ignored | Elasticsearch 9.5.4, `examples/rules-stateful` (alerts on heidi, an hour apart) | draft: [upstream/g5-g6-eql-temporal.md](upstream/g5-g6-eql-temporal.md) |
+| G7 | elasticsearch 2.1.1 (eql) | numeric values | `field:22`; Elasticsearch rejects `:` on numeric fields ("consider using [==] instead") | Elasticsearch 9.5.4, `examples/rules` (dst_port, QID) | draft: [upstream/g7-eql-numeric-colon.md](upstream/g7-eql-numeric-colon.md) (related: #103, #109) |
+| G8 | elasticsearch 2.1.1 (eql) | `\|re` | rendered with `regex~`, EQL's case-insensitive regex operator (Sigma regexes are case-sensitive); whole-value like G2 | Elasticsearch 9.5.4, case 02 (matches `ADM`, misses `sysadmin`) | draft: [upstream/g8-eql-regex-case.md](upstream/g8-eql-regex-case.md) |
 
 Splunk 10.4.3 (local) and the Kusto emulator (`real-engines` workflow run 35982350005, x86-64)
 agreed with the Sigma rule on every single-event example; Splunk also on every correlation apart
