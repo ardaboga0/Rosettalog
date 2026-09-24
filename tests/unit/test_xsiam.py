@@ -66,7 +66,7 @@ ACME = ROOT / "examples" / "acme_firewall" / "acme_fw.lsx.xml"
 
 def test_one_statement_with_case_sensitivity_and_cleanup() -> None:
     result = XsiamBackend().generate(parse_lsx(ACME), {"vendor": "acme", "product": "firewall"})
-    [f] = result.files
+    f, _model = result.files
     text = f.content
     assert f.path == "acme_fw_lsx.xif"
     assert (
@@ -103,9 +103,10 @@ def test_match_group_selector_uses_one_statement(lsx) -> None:
     text = result.files[0].content
     assert "_rl_mg = if(" in text
     em = XsiamEmulator(result)
-    assert em.extract("evt=ALPHA user=u1", now=NOW) == {"event_name": "ALPHA", "user_name": "u1"}
+    event, user = "xdm.event.original_event_type", "xdm.source.user.username"
+    assert em.extract("evt=ALPHA user=u1", now=NOW) == {event: "ALPHA", user: "u1"}
     # group 2 wins for BETA; UserName is only defined in group 1, so it gets no value (A01)
-    assert em.extract("evt=BETA user=u2", now=NOW) == {"event_name": "BETA", "user_name": None}
+    assert em.extract("evt=BETA user=u2", now=NOW) == {event: "BETA", user: None}
 
 
 # --- timestamps ---------------------------------------------------------------------------------
@@ -200,3 +201,73 @@ def test_differences_from_qradar_are_explained(samples: Path, lsx_path: Path) ->
         for c in s.checks:
             if not c.matches_source:
                 assert c.field in explained or c.field in affected, f"{s.name}/{c.field}"
+
+
+# --- M5b: Data Model Rules (XDM) ------------------------------------------------------------------
+
+#: Every XDM name Rosettalog may emit, each checked against the published schema pages
+#: (https://cortex-docs.paloaltonetworks.com/xsiam-data-model-schema/fields/...). Adding a name
+#: to field_map.yaml requires checking the schema and extending this list.
+VERIFIED_XDM = {
+    "xdm.source.ipv4", "xdm.source.ipv6", "xdm.source.port",
+    "xdm.target.ipv4", "xdm.target.ipv6", "xdm.target.port",
+    "xdm.source.user.username",
+    "xdm.source.host.mac_addresses", "xdm.target.host.mac_addresses",
+    "xdm.event.original_event_type",
+}  # fmt: skip
+
+
+def test_xdm_column_only_uses_verified_schema_fields() -> None:
+    from rosettalog.ir.fields import field_table
+
+    used = {row["xdm"] for row in field_table().values() if row.get("xdm")}
+    assert used <= VERIFIED_XDM
+
+
+def test_data_model_rule(lsx) -> None:
+    artifact = lsx(
+        """
+  <pattern id="S" xmlns=""><![CDATA[src=(\\S+) spt=(\\d+) mac=(\\S+) host=(\\S+)]]></pattern>
+  <match-group order="1" xmlns="">
+    <matcher field="SourceIp" order="1" pattern-id="S" capture-group="1"/>
+    <matcher field="SourcePort" order="1" pattern-id="S" capture-group="2"/>
+    <matcher field="SourceMAC" order="1" pattern-id="S" capture-group="3"/>
+    <matcher field="HostName" order="1" pattern-id="S" capture-group="4"/>
+  </match-group>
+"""
+    )
+    result = XsiamBackend().generate(artifact, {"vendor": "acme", "product": "fw"})
+    _rule, model = result.files
+    assert model.path.endswith(".model.xif")
+    assert '[MODEL: dataset="acme_fw_raw"]' in model.content
+    assert "xdm.source.port = to_integer(source_port)" in model.content
+    assert "xdm.source.host.mac_addresses = arraycreate(source_mac)" in model.content
+    assert "host_name" not in model.content  # no XDM equivalent: stays raw
+    [unmapped] = [f for f in result.findings if f.code == "FIELD_UNMAPPED"]
+    assert "kept in the raw dataset as 'host_name'" in unmapped.message
+    assert result.field_names == {
+        "SourceIp": "xdm.source.ipv4",
+        "SourcePort": "xdm.source.port",
+        "SourceMAC": "xdm.source.host.mac_addresses",
+        "HostName": "host_name",
+    }
+    values = XsiamEmulator(result).extract("src=192.0.2.1 spt=0443 mac=aa:bb host=h1", now=NOW)
+    # to_integer() drops the leading zero: a real difference from QRadar's "0443"
+    assert values == {
+        "xdm.source.ipv4": "192.0.2.1",
+        "xdm.source.port": "443",
+        "xdm.source.host.mac_addresses": "aa:bb",
+        "host_name": "h1",
+    }
+
+
+def test_model_must_target_the_parsed_dataset() -> None:
+    result = XsiamBackend().generate(parse_lsx(ACME), {})
+    bad = [
+        f.model_copy(update={"content": f.content.replace('dataset="', 'dataset="x')})
+        if f.path.endswith(".model.xif")
+        else f
+        for f in result.files
+    ]
+    with pytest.raises(XsiamEmulationError, match="parsed dataset"):
+        XsiamEmulator(result.model_copy(update={"files": bad}))

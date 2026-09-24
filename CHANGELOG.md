@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (M5b: Cortex XSIAM Data Model Rules / XDM)
+- The `xsiam` backend also emits `<name>.model.xif`, mapping extracted fields to XDM for the
+  schema-verified names in the new `xdm` column of `field_map.yaml` (with `to_integer` for ports
+  and `arraycreate` for MAC addresses). Everything else stays in the raw dataset with
+  `FIELD_UNMAPPED`; no XDM names are invented. A test locks the column to the verified list.
+- The XSIAM emulator applies the Data Model Rule after the Parsing Rule, so verification compares
+  the XDM values. New finding `XSIAM_XDM_MAPPED`.
+
 ### Added (M5a: Cortex XSIAM Parsing Rules; emulator-verified only)
 - `xsiam` backend: LSX → XSIAM Parsing Rules (`.xif`), with the same semantics as the other
   backends.
