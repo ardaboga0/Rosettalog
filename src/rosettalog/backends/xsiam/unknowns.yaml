@@ -1,0 +1,79 @@
+# Single source of truth for Cortex XSIAM behaviour the `xsiam` backend and emulator RELY ON
+# although Palo Alto's documentation does not state it (target-side unknowns, unlike the QRadar
+# assumptions of the frontends). Each is evidenced by Palo Alto's shipped content
+# (github.com/demisto/content) or follows from documented functions, and each has a minimal case
+# in examples/confirmation/xsiam/ to check in the Parsing Rules editor's Simulate view.
+#
+# Generated from this file (do not edit by hand; run
+# `uv run python -m rosettalog.backends.xsiam.docs_sync` after changing it):
+#   - examples/confirmation/xsiam/README.md    "Cases" table
+#   - docs/lsx-support-matrix.md               "XSIAM behaviour awaiting confirmation" table
+# status: unconfirmed | confirmed | refuted. Findings linked by `topic` follow the status.
+source_format: xsiam
+confirmation_dir: examples/confirmation/xsiam
+assumptions:
+  - id: X01
+    case: 01-regexcapture-no-match
+    question: >-
+      What does regexcapture() return when the pattern does not match, and what does a named
+      group that did not participate read as?
+    assumption: >-
+      An empty object, so 'obj -> m' is null (shipped rules test to_string(x) = "{}"); a group
+      that did not participate reads as null. The generated rules treat null and "" alike for
+      groups, so only the no-match case matters.
+    alternatives: >-
+      No match returns null or raises a parsing error (matched stays null either way, but check
+      the Errors); a non-participating group reads as "" (harmless) or is missing.
+    scope: per-artifact
+    findings: [XSIAM_REGEXCAPTURE_SEMANTICS]
+    topic: xsiam-regexcapture
+
+  - id: X02
+    case: 02-string-literals
+    question: >-
+      In XQL string literals, are backslashes passed through unchanged, with \" as the only
+      escape (a double quote)?
+    assumption: >-
+      Yes (563 uses of \" and patterns like "[\\/]" in shipped rules). Every generated regex
+      relies on it.
+    alternatives: >-
+      Backslash escapes are processed (\\ becomes \): 'b' is null or differs, and regexes such
+      as \d may break.
+    scope: global
+    topic: xsiam-string-literal
+
+  - id: X03
+    case: 03-inline-flags
+    question: Does an inline flag in the middle of a pattern, e.g. (?i) after some text, work?
+    assumption: >-
+      Yes, as in RE2. The docs only describe one leading (?i), so the backend reports patterns
+      that need it.
+    alternatives: The rule is rejected, or the flag is ignored ('r' is null for code=ABC).
+    scope: per-artifact
+    findings: [XSIAM_REGEX_INLINE_FLAGS]
+    topic: xsiam-inline-flags
+
+  - id: X04
+    case: 04-timestamp-normalization
+    question: >-
+      Do format_string("%04d-%02d-%02d %02d:%02d:%02d", ...) and parse_timestamp("%Y-%m-%d
+      %H:%M:%E*S", ..., "+03:00") together give the documented result, including fractions?
+    assumption: >-
+      Yes: the timestamp is 2026-03-05 06:07:03.120 UTC. Every translated DeviceTime relies on
+      this construction.
+    alternatives: A different _time (e.g. the fraction or the offset ignored), or null.
+    scope: global
+    topic: xsiam-timestamp
+
+  - id: X05
+    case: 05-to-integer
+    question: >-
+      Does to_integer() turn "0443" into 443, and a non-numeric value into null without
+      rejecting the event?
+    assumption: >-
+      Yes. Data Model Rules convert ports with to_integer(), so "0443" becomes 443 (reported)
+      and a non-numeric port becomes null.
+    alternatives: A non-numeric value raises an error and the event is not modeled.
+    scope: per-artifact
+    findings: [XSIAM_XDM_INTEGER_NORMALIZATION]
+    topic: xsiam-to-integer

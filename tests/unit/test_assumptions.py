@@ -26,7 +26,10 @@ def test_generated_docs_are_up_to_date() -> None:
 
 
 def test_every_case_has_an_assumption_and_vice_versa() -> None:
-    case_dirs = {p.name for p in (ROOT / ASET.confirmation_dir).iterdir() if p.is_dir()}
+    # examples/confirmation/xsiam/ holds the XSIAM (target) pack, with its own registry
+    case_dirs = {
+        p.name for p in (ROOT / ASET.confirmation_dir).iterdir() if p.is_dir() and p.name != "xsiam"
+    }
     referenced = {a.case for a in ASET.assumptions}
     assert case_dirs == referenced
     ids = [a.id for a in ASET.assumptions]

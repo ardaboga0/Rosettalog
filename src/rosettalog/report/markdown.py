@@ -173,9 +173,11 @@ def _assumptions(report: MigrationReport) -> list[str]:
     lines = [
         "## Unconfirmed global assumptions",
         "",
-        "These assumptions about the source SIEM apply to **every** artifact above. They are not "
-        "reported per artifact. Each one has a minimal confirmation case (LSX plus sample logs) to "
-        "run on the source SIEM. An assumption leaves this list once it is confirmed.",
+        "These assumptions apply to **every** artifact above, so they are not reported per "
+        "artifact. Most are about the source SIEM; IDs starting with X are undocumented Cortex "
+        "XSIAM behaviour the XSIAM output relies on. Each one has a minimal confirmation case "
+        "(under `examples/confirmation/`, XSIAM ones under `examples/confirmation/xsiam/`) to run "
+        "on that SIEM. An assumption leaves this list once it is confirmed.",
         "",
         "| ID | Status | Question | Current assumption | Confirmation case |",
         "|---|---|---|---|---|",

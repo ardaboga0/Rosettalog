@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (XSIAM confirmation pack)
+
+- `examples/confirmation/xsiam/`: one minimal parsing rule (`rule.xif`), `sample.log` and
+  `expected.yaml` per undocumented XSIAM behaviour the output relies on (X01-X05), with
+  instructions for the Parsing Rules editor's Simulate view and `send.sh` for an HTTP collector.
+- `src/rosettalog/backends/xsiam/unknowns.yaml`: the registry of these behaviours, with the same
+  status tracking as the QRadar assumptions (`unconfirmed`/`confirmed`/`refuted`, per-artifact
+  or global). The tables in the pack README and `docs/lsx-support-matrix.md` are generated from
+  it (`uv run python -m rosettalog.backends.xsiam.docs_sync`).
+- Backends can now provide their own assumption registry (`assumptions()`). Findings that depend
+  on a target behaviour follow its status, and reports with that target list its open global
+  entries (X02, X04) under "Unconfirmed global assumptions".
+- `XSIAM_XDM_INTEGER_NORMALIZATION` (PARTIAL): a port modeled with `to_integer()` loses its text
+  form (`"0443"` becomes 443) and a non-numeric port is assumed to become null (X05). This was
+  previously only visible as a verification difference.
+
+### Changed (XSIAM confirmation pack)
+
+- `XSIAM_REGEXCAPTURE_SEMANTICS` and `XSIAM_REGEX_INLINE_FLAGS` are linked to X01 and X03.
+- The XSIAM emulator's `to_integer()` returns null for non-numeric text (X05).
+
 ### Added (M5d: opt-in Cortex XSIAM tenant runner; stub-tested only)
 - `--runner xsiam` (`verify/real/xsiam.py`) compares a tenant's real output with the emulator.
   - It uses only documented interfaces: the HTTP log collector (`/logs/v1/event`) and the XQL

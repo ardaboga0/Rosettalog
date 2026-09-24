@@ -1,0 +1,11 @@
+// Rosettalog XSIAM confirmation case X01 (synthetic). See README.md.
+[INGEST:vendor="rosettalog", product="rl_x01", target_dataset="rosettalog_rl_x01_raw", no_hit=keep]
+config case_sensitive = true
+| alter
+    _c = regexcapture(_raw_log, "(?P<m>user=(?P<g1>\w+))"),
+    _o = regexcapture(_raw_log, "(?P<m>id=(?P<g1>\d+)(?:,(?P<g2>\w+))?)")
+| alter
+    matched = if(_c -> m != null, "yes", "no"),
+    user = _c -> g1,
+    opt = if(_o -> m = null, "no match", _o -> g2 = null, "null", _o -> g2 = "", "empty", _o -> g2)
+| fields - _c, _o;

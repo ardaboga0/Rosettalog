@@ -1,0 +1,8 @@
+// Rosettalog XSIAM confirmation case X05 (synthetic). See README.md.
+[INGEST:vendor="rosettalog", product="rl_x05", target_dataset="rosettalog_rl_x05_raw", no_hit=keep]
+config case_sensitive = true
+| alter
+    _p = regexcapture(_raw_log, "(?P<m>port=(?P<g1>\S+))")
+| alter
+    port = to_integer(_p -> g1)
+| fields - _p;

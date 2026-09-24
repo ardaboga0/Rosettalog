@@ -1,0 +1,8 @@
+// Rosettalog XSIAM confirmation case X04 (synthetic). See README.md.
+[INGEST:vendor="rosettalog", product="rl_x04", target_dataset="rosettalog_rl_x04_raw", no_hit=keep]
+config case_sensitive = true
+| alter
+    _t = regexcapture(_raw_log, "(?P<m>ts=(?P<g1>\d{4})-(?P<g2>\d{1,2})-(?P<g3>\d{1,2}) (?P<g4>\d{1,2}):(?P<g5>\d{2}):(?P<g6>\d{2})\.(?P<g7>\d+) (?P<g8>[+-])(?P<g9>\d{2}):(?P<g10>\d{2}))")
+| alter
+    _time = parse_timestamp("%Y-%m-%d %H:%M:%E*S", concat(format_string("%04d-%02d-%02d %02d:%02d:%02d", to_integer(_t -> g1), to_integer(_t -> g2), to_integer(_t -> g3), to_integer(_t -> g4), to_integer(_t -> g5), to_integer(_t -> g6)), ".", _t -> g7), concat(_t -> g8, _t -> g9, ":", _t -> g10))
+| fields - _t;

@@ -1,0 +1,8 @@
+// Rosettalog XSIAM confirmation case X03 (synthetic). See README.md.
+[INGEST:vendor="rosettalog", product="rl_x03", target_dataset="rosettalog_rl_x03_raw", no_hit=keep]
+config case_sensitive = true
+| alter
+    _r = regexcapture(_raw_log, "(?P<m>code=(?i)(?P<g1>abc))")
+| alter
+    r = _r -> g1
+| fields - _r;
