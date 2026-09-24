@@ -1,0 +1,1 @@
+EventName:/^auth[\-_]fail(ure)?[0-9]*$/ AND (NOT dst_port:22)

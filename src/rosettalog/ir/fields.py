@@ -1,4 +1,4 @@
-"""Canonical field taxonomy and mapping to target schemas (ASIM, CIM)."""
+"""Canonical field taxonomy and mapping to target schemas (ASIM, CIM, ECS, Sigma)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import yaml
 
 from rosettalog.ir.findings import Finding, Status
 
-Taxonomy = Literal["asim", "cim", "ecs"]
+Taxonomy = Literal["asim", "cim", "ecs", "sigma"]
 
 #: Synthetic canonical field produced from event severity mappings (not a QRadar matcher field).
 EVENT_SEVERITY = "EventSeverity"

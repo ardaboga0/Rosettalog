@@ -13,7 +13,8 @@ from rosettalog.ir import Status
 from rosettalog.pipeline import load_artifacts, run
 from rosettalog.plugins import backends, emulators, frontends, runners
 from rosettalog.report import MigrationReport, json_schema_text, render_json, render_markdown
-from rosettalog.verify.samples import load_samples
+from rosettalog.report.models import TargetReport
+from rosettalog.verify.samples import load_sample_file
 
 app = typer.Typer(
     name="rosettalog",
@@ -147,6 +148,10 @@ def _print_summary(report: MigrationReport) -> None:
                 extra += f", samples {v.passed}/{v.total}"
                 if v.error:
                     extra += " (emulation error)"
+            if tr.rule_verification is not None:
+                rv = tr.rule_verification
+                agree = sum(1 for f in tr.findings if f.code.startswith("VERIFY_")) == 0
+                extra += f", {len(rv.events)} events: " + ("all agree" if agree else "differences")
             typer.echo(f"  {tr.target:<10} {status} {extra}")
 
 
@@ -178,7 +183,7 @@ def convert(
             asim_schema=asim_schema,
             sourcetype=sourcetype,
         )
-        sample_set = load_samples(samples) if samples else None
+        sample_set = load_sample_file(samples) if samples else None
         artifacts = load_artifacts(inputs)
         output.mkdir(parents=True, exist_ok=True)
         report = run(
@@ -232,7 +237,7 @@ def verify(
             load_artifacts(inputs),
             to,
             options=opts,
-            samples=load_samples(samples),
+            samples=load_sample_file(samples),
             require_ground_truth=require_ground_truth,
             engine=engine,
             runner_names=runner or [],
@@ -244,6 +249,9 @@ def verify(
     failed = False
     for artifact in report.artifacts:
         for tr in artifact.targets:
+            if tr.rule_verification is not None:
+                failed |= _echo_rule_verification(artifact.name, tr)
+                continue
             v = tr.verification
             if v is None:
                 typer.echo(f"{artifact.name} -> {tr.target}: not verified (no output)")
@@ -275,6 +283,25 @@ def verify(
         report_md.write_text(render_markdown(report), encoding="utf-8")
     if failed:
         raise typer.Exit(EXIT_NOT_FULL)
+
+
+def _echo_rule_verification(name: str, tr: TargetReport) -> bool:
+    """Print which events each side matched; return True if anything disagrees."""
+    rv = tr.rule_verification
+    assert rv is not None
+    typer.echo(f"{name} -> {tr.target}: {len(rv.events)} events (ground truth: {rv.ground_truth})")
+    if rv.expected is not None:
+        typer.echo(f"  expected: {', '.join(rv.expected) or '(none)'}")
+    for er in rv.runs:
+        engine = f" on {er.engine}" if er.engine else ""
+        if er.error is not None:
+            typer.secho(f"  {er.name}{engine}: error: {er.error}", fg=typer.colors.RED)
+        else:
+            typer.echo(f"  {er.name}{engine}: {', '.join(er.hits or []) or '(none)'}")
+    problems = [f for f in tr.findings if f.code.startswith("VERIFY_")]
+    for f in problems:
+        typer.secho(f"  {f.code}: {f.message}", fg=typer.colors.YELLOW)
+    return bool(problems)
 
 
 @app.command()

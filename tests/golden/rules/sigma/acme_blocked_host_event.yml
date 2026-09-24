@@ -1,0 +1,15 @@
+title: 'Acme FW: event from a blocked host'
+id: ef949e45-051b-5fe2-8b21-6d1c41d86b47
+name: acme_blocked_host_event
+status: experimental
+logsource:
+  product: qradar
+detection:
+  sel_1:
+    QID: 5000001
+  condition: sel_1
+qradar:
+  rule_id: '100103'
+  enabled: false
+  building_block: false
+  rule_type: event

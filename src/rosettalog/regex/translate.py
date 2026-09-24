@@ -12,6 +12,15 @@ Targets:
   no ``\Q..\E`` (https://github.com/kkos/oniguruma/blob/master/doc/RE). The translator
   therefore emits only constructs whose meaning is the same in both: explicit ASCII classes for
   ``\d \w \s``, lookaround-based ``\b``, ``\A``/``\Z`` anchors and explicit whitespace sets.
+* ``sigma``  - the regular expression subset of the Sigma ``re`` modifier: "PCRE with the
+  following metacharacters: ``.``, ``^ $``, ``* + ? {n,m}``, ``[a-z] [^a-z]``, ``|``, ``()``.
+  Other metacharacters are unsupported and can not be used"
+  (https://github.com/SigmaHQ/sigma-specification/blob/main/specification/sigma-appendix-modifiers.md).
+  Escaped metacharacters stand for themselves; every other character is emitted literally.
+  Leading global flags ``i``/``m``/``s`` become the ``re`` sub-modifiers (``flags``); anything
+  that needs lookaround, backreferences, ``\b``, possessive or atomic matching or scoped flags
+  is UNSUPPORTED. Lazy quantifiers become greedy: whether a pattern matches somewhere in a value
+  does not depend on laziness.
 
 A translation returns the new pattern (or ``None`` if impossible) and a list of issues. An issue
 with status PARTIAL means the pattern was emitted but may not behave identically; UNSUPPORTED
@@ -38,7 +47,7 @@ from rosettalog.regex.tokenizer import (
     tokenize,
 )
 
-Target = Literal["re2", "pcre", "python", "onig"]
+Target = Literal["re2", "pcre", "python", "onig", "sigma"]
 
 META = set("\\^$.|?*+()[]{}")
 CLASS_SPECIAL = set("\\]^-[&")
@@ -89,6 +98,8 @@ class RegexTranslation:
     pattern: str | None
     issues: tuple[RegexIssue, ...] = ()
     groups: int = 0
+    flags: str = ""
+    """sigma only: global flags as ``re`` sub-modifiers (subset of ``ims``)."""
 
     @property
     def status(self) -> Status:
@@ -134,6 +145,8 @@ def _fmt_cp(cp: int, target: Target, *, in_class: bool = False) -> str:
     if target == "onig" and cp == 0x25:
         return "\\x{25}"  # never let grok see '%{' (its pattern-reference syntax)
     special = CLASS_SPECIAL if in_class else META
+    if target == "sigma":  # the Sigma subset has no escape sequences: characters are literal
+        return "\\" + ch if ch in special else ch
     if 0x20 <= cp < 0x7F:
         if ch in special:
             return "\\" + ch
@@ -197,6 +210,10 @@ def _class_item(item: ClassItem, ctx: _Ctx) -> str:
             assert item.hi is not None
             return _fmt_cp(item.cp, t, in_class=True) + "-" + _fmt_cp(item.hi, t, in_class=True)
         case ItemKind.ESCAPE_CLASS:
+            if t == "sigma":
+                if item.name.isupper():
+                    raise _sigma_unsupported(f"negated class escape '{item.text}' inside a class")
+                return _sigma_members(_ASCII_CLASS[item.name])
             if t == "onig":
                 ascii_members = _ASCII_CLASS[item.name.lower()]
                 return f"[^{ascii_members}]" if item.name.isupper() else ascii_members
@@ -209,7 +226,9 @@ def _class_item(item: ClassItem, ctx: _Ctx) -> str:
                         "REGEX_CLASS_SET_OPERATION",
                         f"Negated POSIX property '{item.text}' inside a character class.",
                     )
-                return text
+                return _sigma_members(text) if t == "sigma" else text
+            if t == "sigma":
+                raise _sigma_unsupported(f"Unicode property '{item.text}'")
             return ("\\P" if item.negated else "\\p") + "{" + text + "}"
         case ItemKind.HSPACE | ItemKind.VSPACE:
             if t == "pcre":
@@ -227,6 +246,29 @@ def _class_item(item: ClassItem, ctx: _Ctx) -> str:
                 f"supported by {t}.",
             )
     raise AssertionError(item.kind)  # pragma: no cover
+
+
+def _sigma_unsupported(what: str) -> _Unsupported:
+    return _Unsupported(
+        "SIGMA_REGEX_UNSUPPORTED",
+        f"{what[0].upper()}{what[1:]} is outside the regular expression subset Sigma allows for "
+        "the 're' modifier.",
+    )
+
+
+def _sigma_members(text: str) -> str:
+    """Class members written with escapes (``\\t``, ``\\x0B``, ``\\[``) as literal characters."""
+    out: list[str] = []
+    for tok in tokenize("[" + text + "]")[0].items:
+        if tok.kind is ItemKind.RANGE:
+            assert tok.cp is not None
+            assert tok.hi is not None
+            out.append(_fmt_cp(tok.cp, "sigma", in_class=True) + "-")
+            out.append(_fmt_cp(tok.hi, "sigma", in_class=True))
+        else:
+            assert tok.cp is not None
+            out.append(_fmt_cp(tok.cp, "sigma", in_class=True))
+    return "".join(out)
 
 
 def _flags(on: str, off: str, ctx: _Ctx) -> tuple[str, str]:
@@ -284,7 +326,7 @@ def _emit(tokens: list[Token], ctx: _Ctx) -> str:
                 out.append(tok.text if verbatim else _fmt_cp(tok.cp, t))
             case Kind.CLASS:
                 if (
-                    t == "onig"
+                    t in ("onig", "sigma")
                     and tok.negated
                     and any(i.kind is ItemKind.ESCAPE_CLASS and i.name.isupper() for i in tok.items)
                 ):
@@ -296,14 +338,21 @@ def _emit(tokens: list[Token], ctx: _Ctx) -> str:
                 body = "".join(_class_item(item, ctx) for item in tok.items)
                 out.append("[" + ("^" if tok.negated else "") + body + "]")
             case Kind.ESCAPE_CLASS:
-                if t == "onig":
+                if t == "sigma":
+                    body = _sigma_members(_ASCII_CLASS[tok.name.lower()])
+                    out.append(("[^" if tok.name.isupper() else "[") + body + "]")
+                elif t == "onig":
                     ascii_members = _ASCII_CLASS[tok.name.lower()]
                     out.append(("[^" if tok.name.isupper() else "[") + ascii_members + "]")
                 else:
                     out.append(tok.text)
             case Kind.PROPERTY:
                 text, members = _property_members(tok.name, ctx)
-                if members:
+                if members and t == "sigma":
+                    out.append("[" + ("^" if tok.negated else "") + _sigma_members(text) + "]")
+                elif t == "sigma":
+                    raise _sigma_unsupported(f"Unicode property '{tok.text}'")
+                elif members:
                     out.append("[" + ("^" if tok.negated else "") + text + "]")
                 else:
                     out.append(("\\P" if tok.negated else "\\p") + "{" + text + "}")
@@ -319,6 +368,8 @@ def _emit(tokens: list[Token], ctx: _Ctx) -> str:
                     out.append(r"\R")
                 elif t in ("python", "onig"):
                     out.append("(?>" + alt + ")")
+                elif t == "sigma":
+                    raise _sigma_unsupported("the atomic line break '\\R'")
                 else:
                     ctx.partial(
                         "RE2_LINEBREAK_APPROX",
@@ -331,6 +382,8 @@ def _emit(tokens: list[Token], ctx: _Ctx) -> str:
             case Kind.ANCHOR:
                 out.append(_anchor(tok.name, ctx))
             case Kind.BACKREF:
+                if t == "sigma":
+                    raise _sigma_unsupported(f"backreference '{tok.text}'")
                 if t == "re2":
                     raise ctx.unsupported(
                         "RE2_NO_BACKREFERENCE",
@@ -347,6 +400,8 @@ def _emit(tokens: list[Token], ctx: _Ctx) -> str:
             case Kind.GROUP_OPEN:
                 out.append(_group_open(tok, tokens, idx, ctx))
             case Kind.FLAGS:
+                if t == "sigma":
+                    raise _sigma_unsupported(f"inline flags '{tok.text}' after the start")
                 on, off = _flags(tok.flags_on, tok.flags_off, ctx)
                 if on or off:
                     out.append(f"(?{_flag_text(on, off)})")
@@ -359,6 +414,8 @@ def _anchor(name: str, ctx: _Ctx) -> str:
     t = ctx.target
     if t == "onig":
         return _onig_anchor(name, ctx)
+    if t == "sigma":
+        return _sigma_anchor(name, ctx)
     if name in ("^", "$", "\\b", "\\B", "\\A"):
         return name
     if name == "\\z":
@@ -399,6 +456,23 @@ def _onig_anchor(name: str, ctx: _Ctx) -> str:
     return name  # \A \z \Z \G have the same meaning in Oniguruma
 
 
+def _sigma_anchor(name: str, ctx: _Ctx) -> str:
+    """Only ``^``/``$`` exist in the Sigma subset. Without Java's MULTILINE flag, Java ``\\A``
+    and ``^`` match at the same place, and so do Java ``\\Z`` and PCRE ``$``."""
+    if name in ("^", "$"):
+        return name
+    if name in ("\\A", "\\Z") and not ctx.multiline:
+        return "^" if name == "\\A" else "$"
+    if name == "\\z" and not ctx.multiline:
+        ctx.partial(
+            "SIGMA_REGEX_END_ANCHOR",
+            "Java '\\z' (absolute end of input) became '$', which also matches before a final "
+            "line break.",
+        )
+        return "$"
+    raise _sigma_unsupported(f"the anchor '{name}'" + (" with MULTILINE" if ctx.multiline else ""))
+
+
 def _onig_lookbehind_fixed(tokens: list[Token], start: int) -> bool:
     """Oniguruma requires fixed-width lookbehind (only top-level alternatives may differ)."""
     depth = 0
@@ -424,6 +498,14 @@ def _variable_width(tok: Token, depth: int) -> bool:
 def _group_open(tok: Token, tokens: list[Token], idx: int, ctx: _Ctx) -> str:
     t = ctx.target
     g = tok.group
+    if t == "sigma":
+        # Only plain groups exist; capturing does not matter for whether a value matches.
+        if g in (GroupKind.CAPTURE, GroupKind.NAMED, GroupKind.NONCAPTURE):
+            return "("
+        if g is GroupKind.SCOPED_FLAGS:
+            raise _sigma_unsupported(f"scoped flags '{tok.text}'")
+        what = "atomic group" if g is GroupKind.ATOMIC else "lookaround"
+        raise _sigma_unsupported(f"{what} '{tok.text}...)'")
     if g is GroupKind.CAPTURE:
         return "("
     if g is GroupKind.NAMED:
@@ -469,7 +551,9 @@ def _group_open(tok: Token, tokens: list[Token], idx: int, ctx: _Ctx) -> str:
 
 
 def _quant(tok: Token, ctx: _Ctx) -> str:
-    if tok.qmax == tok.qmin:
+    if tok.qmax == tok.qmin and ctx.target == "sigma":
+        base = f"{{{tok.qmin},{tok.qmin}}}"  # the subset lists only the {n,m} form
+    elif tok.qmax == tok.qmin:
         base = {0: "{0}", 1: "{1}"}.get(tok.qmin, f"{{{tok.qmin}}}")
     elif (tok.qmin, tok.qmax) == (0, None):
         base = "*"
@@ -486,8 +570,10 @@ def _quant(tok: Token, ctx: _Ctx) -> str:
             "RE2_REPEAT_LIMIT", f"Repetition '{tok.text}' exceeds RE2's limit of {RE2_MAX_REPEAT}."
         )
     if tok.lazy:
-        return base + "?"
+        return base if ctx.target == "sigma" else base + "?"
     if tok.possessive:
+        if ctx.target == "sigma":
+            raise _sigma_unsupported(f"possessive quantifier '{tok.text}'")
         if ctx.target == "re2":
             ctx.partial(
                 "RE2_POSSESSIVE_APPROX",
@@ -511,7 +597,7 @@ def _validate(pattern: str, target: Target) -> str | None:
             opts = re2.Options()
             opts.log_errors = False
             re2.compile(pattern, opts)
-        elif target == "python":
+        elif target in ("python", "sigma"):
             pyregex.compile(pattern)
     except Exception as exc:  # engine-specific error types
         return str(exc)
@@ -526,9 +612,12 @@ def _uses_multiline(tokens: list[Token]) -> bool:
     )
 
 
-def translate_tokens(tokens: list[Token], target: Target) -> RegexTranslation:
+def translate_tokens(
+    tokens: list[Token], target: Target, *, multiline: bool = False
+) -> RegexTranslation:
     """Translate an already tokenized pattern (or a slice of one) without validation."""
-    ctx = _Ctx(target, multiline=target == "onig" and _uses_multiline(tokens))
+    multiline = multiline or (target in ("onig", "sigma") and _uses_multiline(tokens))
+    ctx = _Ctx(target, multiline=multiline)
     number = 0
     for tok in tokens:
         if tok.kind is Kind.GROUP_OPEN and tok.group in (GroupKind.CAPTURE, GroupKind.NAMED):
@@ -556,11 +645,21 @@ def translate(source: str, target: Target, *, case_insensitive: bool = False) ->
             f"Could not parse the Java regex: {exc}. Nothing was translated.",
         )
         return RegexTranslation(target, None, (issue,))
-    result = translate_tokens(tokens, target)
+    flags = ""
+    if target == "sigma":
+        tokens, flags, dropped = _sigma_leading_flags(tokens, case_insensitive)
+        if any(i.status is Status.UNSUPPORTED for i in dropped):
+            return RegexTranslation(target, None, dropped)
+        result = translate_tokens(tokens, target, multiline="m" in flags)
+        result = RegexTranslation(target, result.pattern, (*dropped, *result.issues), flags=flags)
+    else:
+        result = translate_tokens(tokens, target)
     if result.pattern is None:
         return result
-    pattern = ("(?i)" if case_insensitive else "") + result.pattern
-    error = _validate(pattern, target)
+    prefix = "(?i)" if case_insensitive and target != "sigma" else ""
+    pattern = prefix + result.pattern
+    checked = f"(?{flags})" + pattern if target == "sigma" and flags else pattern
+    error = _validate(checked, target)
     if error is not None:
         code = {"re2": "RE2_COMPILE_ERROR", "python": "EMULATION_COMPILE_ERROR"}.get(
             target, "REGEX_COMPILE_ERROR"
@@ -572,4 +671,37 @@ def translate(source: str, target: Target, *, case_insensitive: bool = False) ->
         )
         return RegexTranslation(target, None, (*result.issues, issue))
     groups = capture_count(tokens)
-    return RegexTranslation(target, pattern, result.issues, groups)
+    return RegexTranslation(target, pattern, result.issues, groups, flags)
+
+
+def _sigma_leading_flags(
+    tokens: list[Token], case_insensitive: bool
+) -> tuple[list[Token], str, tuple[RegexIssue, ...]]:
+    """Move global flags at the very start of the pattern into ``re`` sub-modifiers."""
+    on = {"i"} if case_insensitive else set()
+    issues: list[RegexIssue] = []
+    rest = tokens
+    while rest and rest[0].kind is Kind.FLAGS and not rest[0].flags_off:
+        for flag in rest[0].flags_on:
+            if flag in "ims":
+                on.add(flag)
+            elif flag in "ud":
+                desc = "UNICODE_CASE" if flag == "u" else "UNIX_LINES"
+                issues.append(
+                    RegexIssue(
+                        Status.PARTIAL,
+                        "REGEX_FLAG_DROPPED",
+                        f"Java flag '{flag}' ({desc}) was dropped; case-folding or line-terminator "
+                        "behaviour may differ for non-ASCII input.",
+                    )
+                )
+            else:
+                issues.append(
+                    RegexIssue(
+                        Status.UNSUPPORTED,
+                        "SIGMA_REGEX_UNSUPPORTED",
+                        f"Java flag '{flag}' has no Sigma 're' sub-modifier.",
+                    )
+                )
+        rest = rest[1:]
+    return rest, "".join(sorted(on)), tuple(issues)

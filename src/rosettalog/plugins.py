@@ -62,6 +62,21 @@ class DeploymentSetting(BaseModel):
     note: str = ""
 
 
+class TargetQuery(BaseModel):
+    """A generated query that a real engine can run (e.g. pySigma output for a detection rule)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    language: str
+    """Query language/dialect, e.g. ``splunk``, ``kusto``, ``lucene``, ``esql``."""
+    path: str
+    """The generated file (in ``files``) holding the query."""
+    runner_target: str
+    """Real-engine runner target that can execute it (``splunk``, ``sentinel``, ``elastic``)."""
+    label: str
+    """Who produced it, e.g. "pysigma-backend-splunk 2.1.0"."""
+
+
 class BackendResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -75,9 +90,15 @@ class BackendResult(BaseModel):
     """Effective backend options, so emulators can interpret the output the same way."""
     settings: list[DeploymentSetting] = Field(default_factory=list)
     """Where and when each generated setting takes effect (see :class:`DeploymentSetting`)."""
+    queries: list[TargetQuery] = Field(default_factory=list)
+    """Detection output: queries real engines can run during verification."""
+    output_kind: Literal["parser", "detection"] = "parser"
+    """A parser is only usable if it produces fields; a detection rule may test none."""
 
     @property
     def produced_output(self) -> bool:
+        if self.output_kind == "detection":
+            return bool(self.files)
         return bool(self.files) and bool(self.field_names)
 
 
@@ -110,6 +131,9 @@ class Backend(Protocol):
 
     def generate(self, artifact: Artifact, options: Mapping[str, str]) -> BackendResult: ...
 
+    # Optional: ``def verification_targets(self, options) -> list[str]`` names the real-engine
+    # runner targets that can run this backend's output (default: the backend's own name).
+
 
 @runtime_checkable
 class Emulator(Protocol):
@@ -124,6 +148,9 @@ class Emulator(Protocol):
     def extract(self, log: str, *, now: datetime) -> dict[str, str | None]:
         """Field name (as generated) -> value, for every field in ``result.field_names``."""
         ...
+
+    # Optional, for detection backends: ``def matches(self, event: Mapping[str, str]) -> bool``
+    # decides whether the generated rule matches an event (generated field names -> values).
 
 
 @dataclass(frozen=True)
@@ -147,6 +174,22 @@ class RealEngineSession(Protocol):
     ) -> list[dict[str, RealValue]]:
         """For each log: generated field name -> value, like :meth:`Emulator.extract`."""
         ...
+
+
+@runtime_checkable
+class DetectionSession(Protocol):
+    """A real-engine session that can also run detection queries over structured events."""
+
+    def run_detection(
+        self, query: TargetQuery, content: str, events: Sequence[Mapping[str, str | int]]
+    ) -> set[str]:
+        """Ids (``rl_event_id``) of the events the query matches. Values are strings, or ints
+        for fields with a numeric type."""
+        ...
+
+
+#: Field carrying each sample event's id in events sent to a real engine.
+EVENT_ID_FIELD = "rl_event_id"
 
 
 @runtime_checkable

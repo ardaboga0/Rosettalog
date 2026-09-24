@@ -1,0 +1,19 @@
+title: 'Tessivor VPN: authentication failure outside SSH'
+id: 50430698-bd6a-52b3-a9be-5bd345867e92
+name: tessivor_auth_failure_not_ssh
+status: experimental
+logsource:
+  product: qradar
+detection:
+  sel_1:
+    EventName|re: ^auth[\-_]fail(ure)?[0-9]*$
+  sel_2:
+    dst_port: 22
+  condition: sel_1 and not sel_2
+level: low
+qradar:
+  rule_id: '100102'
+  enabled: true
+  building_block: false
+  rule_type: event
+  severity: 3

@@ -25,7 +25,11 @@ from rosettalog.plugins import (
 )
 from rosettalog.report import ArtifactReport, MigrationReport, TargetReport
 from rosettalog.verify.harness import verify
+from rosettalog.verify.rule_harness import verify_rule
+from rosettalog.verify.rule_samples import RuleSampleSet, rule_ground_truth_problems
 from rosettalog.verify.samples import SampleSet, ground_truth_problems
+
+Samples = SampleSet | RuleSampleSet
 
 
 def _unsupported_input(path: Path, message: str) -> Artifact:
@@ -104,7 +108,7 @@ def run(
     *,
     options: Mapping[str, Mapping[str, str]] | None = None,
     out_dir: Path | None = None,
-    samples: SampleSet | None = None,
+    samples: Samples | None = None,
     require_ground_truth: bool = False,
     engine: str = "emulator",
     runner_names: Sequence[str] = (),
@@ -123,17 +127,26 @@ def run(
     if require_ground_truth:
         if samples is None:
             raise InputError("--require-ground-truth needs a samples file.")
-        problems = [
-            f"{a.name}: {p}"
-            for a in artifacts
-            if a.parser is not None
-            for p in ground_truth_problems(samples, a.parser.fields())
-        ]
+        if isinstance(samples, RuleSampleSet):
+            rules = [(a.id, a.detection.name) for a in artifacts if a.detection is not None]
+            problems = rule_ground_truth_problems(samples, rules)
+        else:
+            problems = [
+                f"{a.name}: {p}"
+                for a in artifacts
+                if a.parser is not None
+                for p in ground_truth_problems(samples, a.parser.fields())
+            ]
         if problems:
             raise InputError("Samples are not usable as ground truth:\n  " + "\n  ".join(problems))
     backends = {t: get_backend(t) for t in targets}
     with ExitStack() as stack:
-        sessions = _open_sessions(stack, targets, runner_names) if engine == "real" else {}
+        runner_targets: list[str] = []
+        for target, backend in backends.items():
+            provider = getattr(backend, "verification_targets", None)
+            runner_targets += provider(options.get(target, {})) if provider else [target]
+        runner_targets = list(dict.fromkeys(runner_targets))
+        sessions = _open_sessions(stack, runner_targets, runner_names) if engine == "real" else {}
         return _run(artifacts, backends, options, out_dir, samples, sessions, inputs)
 
 
@@ -161,7 +174,7 @@ def _run(
     backends: Mapping[str, Backend],
     options: Mapping[str, Mapping[str, str]],
     out_dir: Path | None,
-    samples: SampleSet | None,
+    samples: Samples | None,
     sessions: Mapping[str, RealEngineSession],
     inputs: Sequence[str],
 ) -> MigrationReport:
@@ -203,9 +216,15 @@ def _run(
                 list(result.findings), assumption_set(artifact.source_format)
             )
             verification = None
-            if samples is not None and result.produced_output:
+            rule_verification = None
+            if isinstance(samples, SampleSet) and result.produced_output and artifact.parser:
                 verification = verify(artifact, result, samples, sessions.get(target))
                 findings.extend(verification.findings())
+            elif (
+                isinstance(samples, RuleSampleSet) and result.produced_output and artifact.detection
+            ):
+                rule_verification = verify_rule(artifact, result, samples, sessions)
+                findings.extend(rule_verification.findings(target))
             written: list[str] = []
             if out_dir is not None:
                 for f in result.files:
@@ -228,6 +247,7 @@ def _run(
                     field_names=result.field_names,
                     settings=result.settings,
                     verification=verification,
+                    rule_verification=rule_verification,
                 )
             )
         report.artifacts.append(entry)

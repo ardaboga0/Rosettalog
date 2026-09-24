@@ -1,0 +1,67 @@
+[
+  {
+    "id": "acme_admin_login_test_net",
+    "name": "Acme FW: admin login from documentation network",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {"file": "examples/rules/acme_rules.ir.json"},
+    "detection": {
+      "rule_id": "100101",
+      "uuid": "5d0c9e3a-8b1f-4c62-9d7e-1a2b3c4d5e01",
+      "name": "Acme FW: admin login from documentation network",
+      "notes": "Synthetic example rule for an invented vendor (Acme Firewall).",
+      "severity": 6,
+      "credibility": 5,
+      "relevance": 7,
+      "responses": [
+        {"kind": "newevent", "path": "responses/newevent", "attributes": {"severity": "6", "credibility": "5", "relevance": "7"}}
+      ],
+      "condition": {
+        "kind": "and",
+        "items": [
+          {"kind": "log_source", "by": "log_source_type", "values": ["Acme Firewall"], "path": "test[1]"},
+          {"kind": "field", "field": "SourceIp", "op": "equals", "values": ["192.0.2.10", "192.0.2.11"], "path": "test[2]"},
+          {"kind": "field", "field": "UserName", "op": "contains", "values": ["adm"], "case_sensitive": false, "path": "test[3]"}
+        ]
+      }
+    }
+  },
+  {
+    "id": "tessivor_auth_failure_not_ssh",
+    "name": "Tessivor VPN: authentication failure outside SSH",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {"file": "examples/rules/acme_rules.ir.json"},
+    "detection": {
+      "rule_id": "100102",
+      "name": "Tessivor VPN: authentication failure outside SSH",
+      "severity": 3,
+      "condition": {
+        "kind": "and",
+        "items": [
+          {"kind": "field", "field": "EventName", "op": "regex", "values": ["^auth[-_]fail(ure)?\\d*$"], "path": "test[1]"},
+          {"kind": "not", "item": {"kind": "field", "field": "DestinationPort", "op": "equals", "values": ["22"], "path": "test[2]"}}
+        ]
+      }
+    }
+  },
+  {
+    "id": "acme_blocked_host_event",
+    "name": "Acme FW: event from a blocked host",
+    "kind": "detection",
+    "source_format": "qradar-rules",
+    "provenance": {"file": "examples/rules/acme_rules.ir.json"},
+    "detection": {
+      "rule_id": "100103",
+      "name": "Acme FW: event from a blocked host",
+      "enabled": false,
+      "condition": {
+        "kind": "and",
+        "items": [
+          {"kind": "qid", "values": ["5000001"], "path": "test[1]"},
+          {"kind": "reference", "collection": "Acme Blocked Hosts", "collection_type": "set", "fields": ["SourceIp"], "path": "test[2]"}
+        ]
+      }
+    }
+  }
+]

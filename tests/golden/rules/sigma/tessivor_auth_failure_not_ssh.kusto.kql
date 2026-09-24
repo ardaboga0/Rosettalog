@@ -1,0 +1,1 @@
+EventName matches regex "^auth[\\-_]fail(ure)?[0-9]*$" and (not(dst_port == 22))

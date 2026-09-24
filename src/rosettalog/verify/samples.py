@@ -9,6 +9,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from rosettalog.errors import InputError
+from rosettalog.verify.rule_samples import RuleSampleSet, is_rule_samples, parse_rule_samples
 
 
 class Sample(BaseModel):
@@ -56,6 +57,17 @@ def ground_truth_problems(sample_set: SampleSet, fields: list[str] | None = None
             if unknown:
                 problems.append(f"{label}: 'expected' names unknown field(s) {', '.join(unknown)}")
     return problems
+
+
+def load_sample_file(path: Path) -> SampleSet | RuleSampleSet:
+    """Load log samples (for parsers) or rule sample events (for detections, key ``events``)."""
+    try:
+        data = yaml.safe_load(path.read_text("utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise InputError(f"Invalid samples file {path}: {exc}") from exc
+    if is_rule_samples(data):
+        return parse_rule_samples(data, path)
+    return load_samples(path)
 
 
 def load_samples(path: Path) -> SampleSet:

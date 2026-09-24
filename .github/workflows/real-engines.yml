@@ -25,7 +25,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
-      - run: uv sync --locked
+      - run: uv sync --locked --extra sigma-backends
       # Image pinned in src/rosettalog/verify/real/elastic.py
       - run: uv run pytest -m real_engine --real-engine --real-targets elastic -ra
 
@@ -38,7 +38,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
-      - run: uv sync --locked
+      - run: uv sync --locked --extra sigma-backends
       # Image pinned in src/rosettalog/verify/real/splunk.py (amd64; license accepted via the
       # documented SPLUNK_START_ARGS / SPLUNK_GENERAL_TERMS variables set by the runner).
       - run: uv run pytest -m real_engine --real-engine --real-targets splunk -ra
@@ -52,7 +52,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
-      - run: uv sync --locked
+      - run: uv sync --locked --extra sigma-backends
       # Kusto emulator pinned by digest in src/rosettalog/verify/real/kusto.py; the runner sets
       # ACCEPT_EULA=Y (Microsoft Software License Terms). The ADX runner is never used in CI.
       - run: uv run pytest -m real_engine --real-engine --real-targets sentinel -ra

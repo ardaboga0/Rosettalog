@@ -29,21 +29,35 @@ dependencies = [
     "pyyaml>=6.0",
 ]
 
+[project.optional-dependencies]
+# Sigma output is validated with pySigma, and pySigma's backends convert it to target queries.
+# Pinned: conversion results (and the gaps we report for them) are specific to these versions.
+sigma = ["pysigma==1.5.1"]
+sigma-backends = [
+    "pysigma==1.5.1",
+    "pysigma-backend-splunk==2.1.0",
+    "pysigma-backend-kusto==1.0.1",
+    "pysigma-backend-elasticsearch==2.1.1",
+]
+
 [project.scripts]
 rosettalog = "rosettalog.cli:app"
 
 [project.entry-points."rosettalog.frontends"]
 qradar-lsx = "rosettalog.frontends.qradar_lsx:QRadarLsxFrontend"
+rosettalog-ir = "rosettalog.frontends.ir_json:IrJsonFrontend"
 
 [project.entry-points."rosettalog.backends"]
 sentinel = "rosettalog.backends.sentinel:SentinelBackend"
 splunk = "rosettalog.backends.splunk:SplunkBackend"
 elastic = "rosettalog.backends.elastic:ElasticBackend"
+sigma = "rosettalog.backends.sigma:SigmaBackend"
 
 [project.entry-points."rosettalog.emulators"]
 sentinel = "rosettalog.verify.emulators.kql:KqlEmulator"
 splunk = "rosettalog.verify.emulators.splunk:SplunkEmulator"
 elastic = "rosettalog.verify.emulators.elastic:ElasticEmulator"
+sigma = "rosettalog.verify.emulators.sigma:SigmaEmulator"
 
 [project.entry-points."rosettalog.runners"]
 elastic = "rosettalog.verify.real.elastic:ElasticRunner"
@@ -67,6 +81,8 @@ dev = [
     "types-PyYAML>=6.0",
     "types-regex>=2024.5",
 ]
+# `sigma check` in CI; kept apart from dev so that a plain `uv sync` has no pySigma at all.
+sigma-cli = ["sigma-cli==3.1.0"]
 
 [build-system]
 requires = ["hatchling>=1.26"]
@@ -95,6 +111,11 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 module = ["re2"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# pySigma is an optional extra; without it, its imports are unresolved (and unused at runtime).
+module = ["sigma", "sigma.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

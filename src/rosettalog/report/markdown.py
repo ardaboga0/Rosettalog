@@ -5,6 +5,7 @@ from __future__ import annotations
 from rosettalog.ir import Finding, Status
 from rosettalog.report.models import ArtifactReport, MigrationReport, TargetReport
 from rosettalog.verify.harness import VerificationResult
+from rosettalog.verify.rule_harness import RuleVerificationResult
 
 ICON = {Status.FULL: "✅ FULL", Status.PARTIAL: "⚠️ PARTIAL", Status.UNSUPPORTED: "❌ UNSUPPORTED"}
 LEGEND = (
@@ -86,6 +87,33 @@ def _verification(v: VerificationResult) -> list[str]:
     return lines
 
 
+def _rule_verification(v: RuleVerificationResult) -> list[str]:
+    lines = [
+        f"**Verification:** {len(v.events)} sample events. Ground truth: "
+        f"{v.ground_truth or 'none'}.",
+        "",
+        "| Event | " + " | ".join(_cell(r.name) for r in v.runs) + " | Expected |",
+        "|---" * (len(v.runs) + 2) + "|",
+    ]
+
+    def mark(hits: list[str] | None, event: str) -> str:
+        if hits is None:
+            return "n/a"
+        return "match" if event in hits else "-"
+
+    for event in v.events:
+        cells = [mark(r.hits, event) for r in v.runs]
+        cells.append(mark(v.expected, event) if v.expected is not None else "")
+        lines.append(f"| {_cell(event)} | " + " | ".join(cells) + " |")
+    lines.append("")
+    for r in v.runs:
+        if r.engine:
+            lines.append(f"- {_cell(r.name)} ran on {_cell(r.engine)}.")
+        if r.error:
+            lines.append(f"- {_cell(r.name)}: error: {_cell(r.error)}")
+    return [*lines, ""]
+
+
 SCOPE_TEXT = {
     "index-time": "Index-time settings: take effect only for data indexed **after** deployment, "
     "on the instance that parses the data (e.g. Splunk indexers / heavy forwarders). Already "
@@ -123,6 +151,8 @@ def _target(tr: TargetReport) -> list[str]:
     lines += _findings_table(tr.findings)
     if tr.verification is not None:
         lines += _verification(tr.verification)
+    if tr.rule_verification is not None:
+        lines += _rule_verification(tr.rule_verification)
     return lines
 
 

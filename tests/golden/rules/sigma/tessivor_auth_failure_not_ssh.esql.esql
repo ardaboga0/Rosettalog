@@ -1,0 +1,1 @@
+from * metadata _id, _index, _version | where EventName rlike "^auth[\\-_]fail(ure)?[0-9]*$" and not dst_port==22

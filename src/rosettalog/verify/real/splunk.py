@@ -24,14 +24,14 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, ClassVar
 
-from rosettalog.plugins import BackendResult, NotComparable, RealValue
+from rosettalog.plugins import EVENT_ID_FIELD, BackendResult, NotComparable, RealValue, TargetQuery
 from rosettalog.timefmt.joda import Comp, format_timestamp
 from rosettalog.verify.emulators.splunk import SplunkEmulator
 from rosettalog.verify.real.docker import (
@@ -139,6 +139,47 @@ class SplunkSession:
             self.box.copy_in(str(root), "/opt/splunk/etc/apps/")
             self.box.exec("chown", "-R", "splunk:splunk", APP_DIR, user="root")
         self.restart()
+
+    def run_detection(
+        self, query: TargetQuery, content: str, events: Sequence[Mapping[str, str | int]]
+    ) -> set[str]:
+        """Ingest ``events`` as JSON (pretrained sourcetype ``_json``, index-time JSON field
+        extraction) from a unique source and run ``search index=... source=... <query>``."""
+        if query.language != "splunk":
+            raise RealEngineError(f"Splunk cannot run {query.language} queries")
+        source = f"/tmp/rosettalog-{secrets.token_hex(6)}.json"
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as fh:
+            fh.write("\n".join(json.dumps(dict(e)) for e in events) + "\n")
+            local = fh.name
+        try:
+            self.box.copy_in(local, source)
+        finally:
+            os.unlink(local)
+        self.box.exec("chmod", "644", source, user="root")
+        self.rest(
+            "POST",
+            "/services/data/inputs/oneshot",
+            {"name": source, "sourcetype": "_json", "index": INDEX, "host": "rosettalog"},
+        )
+        window = {"earliest_time": "1", "latest_time": str(int(time.time()) + 366 * 86400)}
+        base = f'search index={INDEX} source="{source}"'
+
+        def export(search: str) -> list[dict[str, Any]]:
+            out = self.rest("POST", "/services/search/jobs/export", {"search": search, **window})
+            return [
+                json.loads(line)["result"]
+                for line in out.splitlines()
+                if line.strip() and '"result"' in line
+            ]
+
+        wait_until(
+            lambda: len(export(f"{base} | stats count by {EVENT_ID_FIELD}")) >= len(events),
+            timeout=300,
+            what="sample events to be searchable",
+            interval=3,
+        )
+        rows = export(f"{base} {content.strip()}\n| table {EVENT_ID_FIELD}")
+        return {str(r[EVENT_ID_FIELD]) for r in rows if r.get(EVENT_ID_FIELD)}
 
     def extract_batch(
         self, result: BackendResult, logs: Sequence[str], *, now: datetime

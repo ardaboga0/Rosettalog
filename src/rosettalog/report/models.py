@@ -10,6 +10,7 @@ from rosettalog.ir import Finding, Status
 from rosettalog.ir.assumptions import Assumption
 from rosettalog.plugins import DeploymentSetting
 from rosettalog.verify.harness import VerificationResult
+from rosettalog.verify.rule_harness import RuleVerificationResult
 
 REPORT_SCHEMA_VERSION = "1"
 
@@ -22,6 +23,7 @@ class TargetReport(BaseModel):
     field_names: dict[str, str] = Field(default_factory=dict)
     settings: list[DeploymentSetting] = Field(default_factory=list)
     verification: VerificationResult | None = None
+    rule_verification: RuleVerificationResult | None = None
 
 
 class ArtifactReport(BaseModel):

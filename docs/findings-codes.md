@@ -45,6 +45,12 @@ refuted) when the report is built, and the text ends with `[Assumption <id>: <st
 | `LSX_QID_MAPPING_EXTERNAL` | FULL | QID mapping lives outside the LSX. Only raw EventName and EventCategory values are migrated. |
 | `NO_FRONTEND` | UNSUPPORTED | No installed frontend recognises the input file. |
 
+## Source: Rosettalog IR (`*.ir.json`)
+
+| Code | Status | Meaning |
+|---|---|---|
+| `IR_INVALID` | UNSUPPORTED | The file is not valid Rosettalog IR. |
+
 ## Regular expressions (Java → target engine)
 
 | Code | Status | Meaning |
@@ -129,6 +135,39 @@ refuted) when the report is built, and the text ends with `[Assumption <id>: <st
 | `ELASTIC_TIMESTAMP_OVERWRITE` | FULL | A parsed DeviceTime replaces any existing `@timestamp`. |
 | `ELASTIC_STRING_TYPES` | FULL | Values are strings; the index mapping decides the final types. |
 
+## Sigma backend (detection rules)
+
+| Code | Status | Meaning |
+|---|---|---|
+| `SIGMA_TEST_DROPPED` | PARTIAL | A source test Sigma cannot express (rule/building-block reference, reference data, an untranslatable regex, a test the frontend did not understand) was left out. It is only left out where that makes the rule **broader** (never where it would miss events), so the Sigma rule may match more events than the source rule. |
+| `SIGMA_CONDITION_EMPTY` | UNSUPPORTED | Nothing of the rule's condition could be expressed, so no rule was written (it would match every event). |
+| `SIGMA_REGEX_UNSUPPORTED` | UNSUPPORTED | The regex needs a construct outside the Sigma `re` subset (lookaround, backreferences, `\b`, possessive/atomic, scoped or mid-pattern flags, Unicode properties). The test is handled as in `SIGMA_TEST_DROPPED`. |
+| `SIGMA_REGEX_END_ANCHOR` | PARTIAL | Java `\z` (absolute end) became `$`, which also matches before a final line break. |
+| `SIGMA_LOGSOURCE_MAPPED` | FULL | A log source (type) test became the Sigma `logsource`, from the `sigma.logsource_map` you supplied. |
+| `SIGMA_LOGSOURCE_UNMAPPED` | PARTIAL | No logsource could be derived. The rule uses `product: qradar`, which names the rule's origin, not a data source. Rosettalog never invents a target logsource. |
+| `SIGMA_LOGSOURCE_CONDITION_KEPT` | PARTIAL | A log source (type) test is kept as a test on the pseudo-field `LogSource`/`LogSourceType`, which target events do not have unless you add or map it. |
+| `SIGMA_QID_CONDITION` | PARTIAL | A QID test is kept as a test on the pseudo-field `QID`. QIDs are QRadar event identifiers. |
+| `SIGMA_LEVEL_MAPPED` | FULL | The event response severity (0-10) became the Sigma `level`. This is a Rosettalog convention (0-1 informational, 2-3 low, 4-6 medium, 7-8 high, 9-10 critical), not an IBM mapping. |
+| `SIGMA_LEVEL_NOT_SET` | FULL | The rule has no severity (no event response), so the Sigma rule has no `level`. |
+| `SIGMA_RULE_DISABLED` | FULL | The source rule is disabled. Sigma has no enabled flag; this is recorded as `qradar.enabled: false`. |
+| `SIGMA_BUILDING_BLOCK` | PARTIAL | A building block became a standalone Sigma rule. In QRadar it never alerts by itself. |
+| `SIGMA_RULE_TYPE_UNSUPPORTED` | UNSUPPORTED | Offense rules test offenses, not events. |
+| `SIGMA_FLOW_RULE` | PARTIAL | Flow rules need a flow data source and field mapping on the target. |
+| `SIGMA_RESPONSE_NOT_REPRESENTABLE` | PARTIAL | A rule response/action (new event, email, reference-set update, ...) has no Sigma equivalent. It is listed, not translated. |
+| `SIGMA_TITLE_TRUNCATED` | PARTIAL | The rule name exceeds Sigma's 256-character title limit. |
+| `SIGMA_VALIDATION_ISSUE` | FULL/PARTIAL | A pySigma validator reported an issue: FULL for low/informational severity, PARTIAL otherwise. |
+| `SIGMA_NOT_VALIDATED` | FULL | pySigma is not installed (extra `sigma`), so the rule was not validated. |
+
+## pySigma conversion
+
+Target queries come from pySigma, not from Rosettalog. These codes name the pySigma backend and
+its version; a gap is a limitation of the downstream tool.
+
+| Code | Status | Meaning |
+|---|---|---|
+| `PYSIGMA_CONVERTED` | FULL | The rule was converted by the named pySigma backend without a processing pipeline, so field names are the Sigma rule's. |
+| `PYSIGMA_BACKEND_GAP` | UNSUPPORTED | The pySigma backend refused the rule (e.g. "Case-sensitive string matching is not supported by backend") or returned nothing. |
+
 ## Verification
 
 | Code | Status | Meaning |
@@ -140,4 +179,8 @@ refuted) when the report is built, and the text ends with `[Assumption <id>: <st
 | `VERIFY_EMULATOR_DIVERGENCE` | PARTIAL | **Emulator bug:** the target emulator disagrees with the real engine for a field. It must be fixed and get a regression test. |
 | `VERIFY_REAL_ENGINE_ERROR` | PARTIAL | The real engine could not run the generated content (for example, it rejected it). |
 | `VERIFY_REAL_NOT_COMPARABLE` | FULL | A field was not compared with the real engine, e.g. a timestamp without a year while the samples' `reference_time` is in a different year than the engine's clock. |
+| `VERIFY_RULE_MISMATCH` | PARTIAL | Rule samples: Rosettalog's evaluation of the source rule (IR evaluator) matches different events than the expected hits. |
+| `VERIFY_RULE_TARGET_MISMATCH` | PARTIAL | Rule samples: the generated rule (target emulator) or a converted query (real engine) matches different events than the source rule. With `SIGMA_TEST_DROPPED`, extra matches are expected. Missed events are a bug unless a finding explains them. |
+| `VERIFY_RULE_DOWNSTREAM_GAP` | PARTIAL | Rule samples: a pySigma query on a real engine matches different events than the Sigma rule itself, so the converter or engine does not implement the Sigma semantics. |
+| `VERIFY_RULE_NOT_EVALUABLE` | PARTIAL | Rule samples: a side could not be evaluated (e.g. a rule reference, missing reference data). |
 | `VERIFY_UNKNOWN_EXPECTED_FIELD` | PARTIAL | A sample lists expected values for a field the parser does not produce (probably a typo), so it was not checked. |

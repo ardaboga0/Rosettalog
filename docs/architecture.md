@@ -11,9 +11,11 @@ Rosettalog does **not** re-implement them:
 - **AQL queries (M2):** there is no AQL grammar in Rosettalog. A documented integration point
   hands queries to an external translator. Rosettalog records that translator's output and
   reported gaps as findings in the same migration report.
-- **QRadar rules and building blocks (M3):** Rosettalog translates rule logic into an IR
-  detection model and emits **Sigma** only. Conversion from Sigma to a target query language is
-  delegated to pySigma.
+- **QRadar rules and building blocks (M3, in progress):** Rosettalog translates rule logic into
+  an IR detection model and emits **Sigma** only. Conversion from Sigma to a target query
+  language is delegated to pySigma (`backends/sigma/pysigma.py` is the only module that talks to
+  it). pySigma's output is never post-processed. When a pySigma backend refuses a construct or
+  changes its meaning, that is a finding (`PYSIGMA_BACKEND_GAP`, `VERIFY_RULE_DOWNSTREAM_GAP`).
 
 ```
  source artifact ──► frontend ──► IR (+ findings) ──► backend ──► target files (+ findings)
@@ -169,7 +171,25 @@ Known differences that remain:
 Target emulators have their own notes: KQL runs on real RE2, and Splunk runs PCRE through
 `regex` in ASCII mode. See [verification.md](verification.md).
 
-## Planned integration points (not implemented; M2/M3 need approval)
+## Detection rules (M3)
+
+- **IR:** `Artifact(kind="detection")` holds a `DetectionSpec`: metadata, the source responses
+  (kept so that they can be reported), and a boolean `Cond` tree (`And`/`Or`/`Not`) over the
+  leaves `FieldTest` (equals/contains/regex), `LogSourceTest`, `QidTest`, `RuleRef`,
+  `ReferenceTest` and `Opaque` (a test the frontend did not understand, always with a finding).
+- **Sigma backend:** each leaf becomes a search identifier and the condition keeps the source
+  structure. Leaves Sigma cannot express are dropped only where that broadens the rule. Rules are
+  validated with every pySigma validator. With `sigma.pysigma_targets`, the pinned pySigma
+  backends convert them, and each query is declared in `BackendResult.queries` (`TargetQuery`:
+  language, file, runner target, producer).
+- **Rule verification** (`verify/rule_harness.py`): rule samples are parsed events with expected
+  hits. Up to four answers are compared per event: the IR evaluator (source semantics), the
+  target emulator's `matches()` (the Sigma emulator interprets the generated YAML), each
+  converted query on a real engine (`DetectionSession.run_detection`), and the expected hits.
+- **Frontends:** `rosettalog-ir` reads IR JSON (`*.ir.json`). The QRadar rule-export frontend is
+  pending (its XML format is undocumented; see the rules support matrix).
+
+## Planned integration points (not implemented; M2 needs approval)
 
 - **M2, external query translators:** an `rosettalog.query_translators` entry-point group. An
   adapter receives an AQL query and a target, calls the external tool (for example Uncoder's
@@ -178,10 +198,6 @@ Target emulators have their own notes: KQL runs on real RE2, and Splunk runs PCR
   stated (`translator=<name>@<version>`) and never claims more fidelity than the tool reports.
   If no adapter is installed, queries are reported as UNSUPPORTED with a pointer to this
   integration point.
-- **M3, rules to Sigma:** QRadar custom rule and building-block exports are parsed into an IR
-  detection model and emitted as Sigma rules. Target queries come from pySigma backends. Rule
-  tests with no Sigma equivalent (offense handling, reference-set operations, stateful sequence
-  tests) become findings.
 
 ## Design notes
 
