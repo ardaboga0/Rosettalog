@@ -1,0 +1,1 @@
+EventName:login_ok AND (EventName:login_ok AND username:dave)

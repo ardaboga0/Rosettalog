@@ -54,8 +54,13 @@ jobs:
           uv run rosettalog convert examples/rules-stateful/stateful_rules.ir.json --to sigma
           -O sigma.pysigma_targets=splunk,kusto,esql,eql
           --samples examples/rules-stateful/samples.yaml -o out-rules-stateful
+      - name: End-to-end building-block example (references, inlining)
+        run: >
+          uv run rosettalog convert examples/rules-bb/bb_rules.ir.json --to sigma
+          -O sigma.pysigma_targets=splunk,kusto,lucene,esql,eql
+          --samples examples/rules-bb/samples.yaml -o out-rules-bb
       - name: sigma check (sigma-cli) over the generated rules
-        run: uv run sigma check --fail-on-error --fail-on-issues out-rules/sigma out-rules-stateful/sigma
+        run: uv run sigma check --fail-on-error --fail-on-issues out-rules/sigma out-rules-stateful/sigma out-rules-bb/sigma
 
   test-without-extras:
     # pySigma is optional: everything else must work, and Sigma output is flagged as not validated.

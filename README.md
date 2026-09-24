@@ -7,13 +7,17 @@
 **Move your QRadar parsing logic to another SIEM, and know exactly what did not make it.**
 
 > [!IMPORTANT]
-> **Pre-release (0.1.0.dev0), not yet published to PyPI.** Rosettalog currently migrates
-> **parsing logic only**: QRadar **Log Source Extensions** → **Microsoft Sentinel** (KQL parser
-> functions, ASIM names), **Splunk** (props.conf / transforms.conf, CIM names) and **Elastic**
-> (ingest pipelines, ECS names). Rule migration to **Sigma** (target queries via pySigma) is in
-> progress: the Sigma side works on Rosettalog IR, and the QRadar rule-export parser is pending
-> (see the [rules support matrix](docs/rules-support-matrix.md)). AQL queries are not
-> translated; for those it will integrate with existing converters (see the
+> **Pre-release (0.1.0.dev0), not yet published to PyPI.** Rosettalog migrates QRadar **Log
+> Source Extensions** → **Microsoft Sentinel** (KQL parser functions, ASIM names), **Splunk**
+> (props.conf / transforms.conf, CIM names) and **Elastic** (ingest pipelines, ECS names), and
+> QRadar-style **detection rules** (single-event rules, counters, sequences, building blocks) →
+> **Sigma**, with target queries from pySigma.
+>
+> **The QRadar rule-export parser is pending.** It waits for QRadar CE confirmation of the rule
+> export format (open questions Q1-Q5 in the [rules support matrix](docs/rules-support-matrix.md)).
+> Until then, rules are described in the documented Rosettalog IR format (`*.ir.json`), which
+> you can write by hand: see [docs/rules-ir-format.md](docs/rules-ir-format.md). AQL queries are
+> not translated; for those it will integrate with existing converters (see the
 > [roadmap](#roadmap)).
 >
 > **Some LSX semantics are unconfirmed assumptions.** IBM's documentation leaves some behaviour
@@ -139,9 +143,10 @@ QRadar LSX ─► frontend ─► IR + findings ─► backend ─► target con
   sample logs for each one, ready to load into QRadar CE.
 - **Deployment scope.** Splunk index-time settings (they affect only newly indexed data) are
   separated from search-time extractions in both the generated props.conf and the report.
-- **Rules → Sigma (in progress).** Detection rules become Sigma rules; pySigma converts them to
-  SPL, KQL, Lucene or ES|QL (`pip install 'rosettalog[sigma-backends]'`,
-  `-O sigma.pysigma_targets=splunk,kusto,lucene,esql`). Rule verification compares the source
+- **Rules → Sigma.** Detection rules, written as [Rosettalog IR](docs/rules-ir-format.md) until
+  the QRadar rule-export parser exists, become Sigma rules and correlations; pySigma converts
+  them to SPL, KQL, Lucene, ES|QL or EQL (`pip install 'rosettalog[sigma-backends]'`,
+  `-O sigma.pysigma_targets=splunk,kusto,lucene,esql,eql`). Rule verification compares the source
   rule, the Sigma rule and each converted query on real engines, and reports where a pySigma
   backend does not keep Sigma's meaning. See [docs/rules-support-matrix.md](docs/rules-support-matrix.md).
 - **Architecture.** Frontends and backends are plugins discovered through entry points, so
@@ -154,7 +159,7 @@ QRadar LSX ─► frontend ─► IR + findings ─► backend ─► target con
 | M0 ✅ | Scaffolding, IR, plugin system, report, CI |
 | M1 ✅ | LSX → Sentinel KQL + Splunk props/transforms, report, verification harness |
 | M2 | AQL: a documented integration point plus an optional adapter that hands queries to an external translator (e.g. Uncoder) and records its output and gaps as findings. No AQL grammar of our own. |
-| M3 (in progress) | QRadar custom rules and building blocks → IR detection model → **Sigma** only; target conversion is delegated to pySigma. M3a (single-event rules) and M3b (counters, sequences → Sigma correlations) done on IR input; rule-export parser pending (needs a QRadar CE export) |
+| M3 ✅ (parser open) | QRadar custom rules and building blocks → IR detection model → **Sigma** only; target conversion is delegated to pySigma. Done: single-event rules, counters and sequences (Sigma correlations), building blocks and reference data, on IR input. **Open:** the QRadar rule-export parser, as its own PR once Q1-Q5 are confirmed on QRadar CE |
 | M4 | Elastic ingest pipelines; opt-in verification against real engines: Elasticsearch, Splunk, Kusto emulator (x86-64 only) and an opt-in ADX runner |
 | M5 | Cortex XSIAM (XQL parsing rules) |
 

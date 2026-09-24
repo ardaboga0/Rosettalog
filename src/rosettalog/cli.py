@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Annotated
 
 import typer
+from pydantic import TypeAdapter
 
 from rosettalog import __version__
 from rosettalog.errors import RosettalogError
-from rosettalog.ir import Status
+from rosettalog.ir import Artifact, Status
 from rosettalog.pipeline import load_artifacts, run
 from rosettalog.plugins import backends, emulators, frontends, runners
 from rosettalog.report import MigrationReport, json_schema_text, render_json, render_markdown
@@ -336,8 +338,19 @@ def plugins() -> None:
 
 
 @app.command()
-def schema() -> None:
-    """Print the JSON schema of report.json."""
+def schema(
+    ir: Annotated[
+        bool,
+        typer.Option(
+            "--ir", help="Print the schema of Rosettalog IR (*.ir.json) instead of report.json."
+        ),
+    ] = False,
+) -> None:
+    """Print the JSON schema of report.json (or, with --ir, of *.ir.json files)."""
+    if ir:
+        schema_ = TypeAdapter(list[Artifact]).json_schema()
+        typer.echo(json.dumps(schema_, indent=2))
+        return
     typer.echo(json_schema_text(), nl=False)
 
 

@@ -1,0 +1,23 @@
+title: 'BB: cycle B'
+id: d062f1f7-e2e4-5700-bd1d-1b4ef48af362
+name: bb_cycle_b
+status: experimental
+description: 'Rosettalog: this rule is BROADER than the source QRadar rule (tests: test[2]); it may match
+  events the original does not. See qradar.dropped_tests.'
+logsource:
+  product: qradar
+detection:
+  sel_1:
+    username: dave
+  condition: sel_1
+qradar:
+  rule_id: '200004'
+  enabled: true
+  building_block: true
+  rule_type: event
+  broader_than_source: true
+  dropped_tests:
+  - test: test[2]
+    dropped: Reference to rule(s)/building block(s) 200003, which could not be resolved (see the RULE_REF_*
+      finding).
+    exclusion: false

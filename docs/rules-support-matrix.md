@@ -7,12 +7,13 @@ write its own query renderers, and it does not patch pySigma's output. When a ba
 construct or changes its meaning, that is reported as a gap in the downstream tool.
 
 > [!NOTE]
-> **Status (M3a in progress).** The detection IR, the Sigma backend, pySigma validation and
+> **Status (M3a-M3c on IR input).** The detection IR, the Sigma backend, pySigma validation and
 > conversion, and rule verification (IR evaluator, Sigma emulator, real engines) are
 > implemented. The **QRadar rule export parser is not yet implemented**. IBM publishes no schema
 > for the rule XML inside content-management exports, and its test-parameter encoding must be
-> confirmed first. Until then, detection artifacts are read from Rosettalog IR
-> (`*.ir.json`, e.g. [`examples/rules/`](../examples/rules/)).
+> confirmed first (Q1-Q5 below). Until then, detection artifacts are read from Rosettalog IR
+> (`*.ir.json`), documented for hand-written rules in [rules-ir-format.md](rules-ir-format.md);
+> see also [`examples/rules/`](../examples/rules/).
 
 ## Rule tests (IR) → Sigma
 
@@ -25,8 +26,11 @@ construct or changes its meaning, that is reported as a gap in the downstream to
 | AND / OR / NOT | one search identifier per test; the condition keeps the source's structure | FULL |
 | Log source / log source type | the Sigma `logsource`, **only** from a `sigma.logsource_map` you provide; otherwise kept as a test on `LogSource`/`LogSourceType` | FULL (mapped) / PARTIAL |
 | QID in list | kept as a test on the pseudo-field `QID` | PARTIAL (`SIGMA_QID_CONDITION`) |
-| Rule / building-block reference | not yet translated (M3c); dropped, broadening the rule | PARTIAL (`SIGMA_TEST_DROPPED`) |
-| Reference set/map test | not translated (M3c: named, with the target mechanism); dropped, broadening the rule | PARTIAL (`SIGMA_TEST_DROPPED`) |
+| Rule / building-block reference in a rule | the building block's tests are **inlined** (any → OR, all → AND, recursively), because a Sigma detection cannot reference a rule. Every building block is also written as its own Sigma rule | FULL note (`SIGMA_BB_INLINED`), per R09 |
+| Building block as a counter's events, or as a sequence step (with no other rule condition) | the correlation **references the building block's own Sigma rule by name** (`rules: [<bb id>]`); deploy both files | FULL note (`SIGMA_BB_REFERENCED`) |
+| Unresolvable reference: missing, ambiguous, cycle, or nested in a referenced rule | reported when loading (`RULE_REF_MISSING`/`_AMBIGUOUS`/`_CYCLE`/`_NESTED`); the reference is dropped, broadening the rule | PARTIAL / UNSUPPORTED (cycle) |
+| Reference to a counter/sequence rule inside a detection | dropped (Sigma detections cannot contain a correlation) | PARTIAL (`SIGMA_TEST_DROPPED`) |
+| Reference set/map test | not generated; the finding names the collection, its type and fields, and the target mechanism (Sentinel watchlist, Splunk lookup, Elasticsearch enrich policy / terms lookup); the test is dropped, broadening the rule | PARTIAL (`SIGMA_REFERENCE_DATA`, `SIGMA_TEST_DROPPED`) |
 | Test not understood by the frontend | dropped, broadening the rule | PARTIAL (`SIGMA_TEST_DROPPED`) |
 | Counter: at least N events, same X, within T | a base rule (`<id>_events`) plus an `event_count` correlation (`group-by`, `timespan`, `condition: {gte: N}`), in one multi-document `.yml` | PARTIAL until R04 (sliding window) and, for several fields, R05 (per-combination grouping) are confirmed (`SIGMA_COUNTER_WINDOW`, `SIGMA_COUNTER_GROUPING`) |
 | Counter: at least N different values of F | `value_count` correlation with `condition.field` | as above |
@@ -119,6 +123,7 @@ encoding) are not assumptions: the rule-export parser waits for them.
 | R06 | Once a counter's threshold is reached, does the rule fire once, or again for every further event in the window? | Once per group and window, at the event that reaches the threshold (e2). Verification compares which groups alert, not how often, so this only affects the number of alerts. | global: listed in every report while not confirmed | [06](../examples/confirmation-rules/06-counter-firing) | unconfirmed |
 | R07 | In a sequence ("in the order"), may other events occur between the steps? | Yes. Only the order of the step events matters (Sigma temporal_ordered). | per artifact: `SIGMA_SEQUENCE_GAPS` | [07](../examples/confirmation-rules/07-sequence-gaps) | unconfirmed |
 | R08 | Is a sequence's "within N minutes" measured from the first to the last step? | Yes. All steps must fall within N minutes of the first one (Sigma: all events inside the timespan). | per artifact: `SIGMA_SEQUENCE_WINDOW` | [08](../examples/confirmation-rules/08-sequence-window) | unconfirmed |
+| R09 | Are building blocks evaluated per event, so that "matches any of these rules" is an OR of the building blocks' tests on that event, and "matches all" an AND on that same event? | Yes. A referenced building block is equivalent to its tests, applied to the same event, so Rosettalog inlines them into rules (Sigma cannot reference rules in a detection). | global: listed in every report while not confirmed | [09](../examples/confirmation-rules/09-building-blocks) | unconfirmed |
 <!-- END GENERATED: rule-assumptions -->
 
 ## pySigma backends (pinned)
@@ -149,18 +154,18 @@ Every difference between a converted query on a real engine and the Sigma rule i
 in `tests/real/test_rules_differential.py` and listed here. Upstream reports (drafts, existing
 issues, and filed issues) are tracked in [upstream/](upstream/README.md).
 
-| # | Backend | Construct | Observed | Evidence |
-|---|---|---|---|---|
-| G0 | splunk 2.1.0, kusto 1.0.1, elasticsearch 2.1.1 (lucene, esql; **not** eql) | `\|cased` | conversion refused: "Case-sensitive string matching is not supported by backend". Rosettalog therefore does not emit `cased` (see above) | `tests/unit/test_pysigma_gaps.py` |
-| G1 | elasticsearch 2.1.1 (lucene, esql) | plain/`contains` values (case-insensitive in Sigma) | matched case-sensitively on keyword fields: `username\|contains: adm` misses `SysADM` | Elasticsearch 9.5.4, `examples/rules` e3 |
-| G2 | elasticsearch 2.1.1 (lucene, esql) | `\|re` with `^`/`$` | passed through unchanged, but Lucene regular expressions have no anchors and always match the whole value ([regexp syntax](https://www.elastic.co/docs/reference/query-languages/query-dsl/regexp-syntax)): `/^auth.../` matches nothing | Elasticsearch 9.5.4, `examples/rules` e4, e7 |
+| # | Backend | Construct | Observed | Evidence | Upstream |
+|---|---|---|---|---|---|
+| G0 | splunk 2.1.0, kusto 1.0.1, elasticsearch 2.1.1 (lucene, esql; **not** eql) | `\|cased` | conversion refused: "Case-sensitive string matching is not supported by backend". Rosettalog therefore does not emit `cased` (see above) | `tests/unit/test_pysigma_gaps.py` | – |
+| G1 | elasticsearch 2.1.1 (lucene, esql) | plain/`contains` values (case-insensitive in Sigma) | matched case-sensitively on keyword fields: `username\|contains: adm` misses `SysADM` | Elasticsearch 9.5.4, `examples/rules` e3 | ES\|QL: [#107](https://github.com/SigmaHQ/pySigma-backend-elasticsearch/issues/107); Lucene: see #21/#178, draft in [upstream/](upstream/g1-case-insensitivity.md) |
+| G2 | elasticsearch 2.1.1 (lucene, esql) | `\|re` with `^`/`$` | passed through unchanged, but Lucene regular expressions have no anchors and always match the whole value ([regexp syntax](https://www.elastic.co/docs/reference/query-languages/query-dsl/regexp-syntax)): `/^auth.../` matches nothing | Elasticsearch 9.5.4, `examples/rules` e4, e7 | draft: [upstream/g2-regex-anchors.md](upstream/g2-regex-anchors.md) |
 
-| G3 | splunk 2.1.0, elasticsearch 2.1.1 (esql) | correlations | fixed time buckets (`bin _time span=`, `date_trunc`) instead of a sliding window: groups whose events straddle a bucket boundary are missed | Splunk 10.4.3 and Elasticsearch 9.5.4, `examples/rules-stateful` (192.0.2.21, ivan) |
-| G4 | elasticsearch 2.1.1 (eql) | `value_count` | `[...] by <field> with runs=N`: N events with the **same** value, not N distinct values | Elasticsearch 9.5.4, `examples/rules-stateful` (alerts on .31, misses .30) |
-| G5 | elasticsearch 2.1.1 (eql) | `temporal_ordered` | `... by  with runs=2`: invalid EQL, rejected with a parse error | Elasticsearch 9.5.4, `examples/rules-stateful`, cases 07/08 |
-| G6 | elasticsearch 2.1.1 (eql) | `temporal` | `sample by ...` without `maxspan`: the timespan is ignored | Elasticsearch 9.5.4, `examples/rules-stateful` (alerts on heidi, an hour apart) |
-| G7 | elasticsearch 2.1.1 (eql) | numeric values | `field:22`; Elasticsearch rejects `:` on numeric fields ("consider using [==] instead") | Elasticsearch 9.5.4, `examples/rules` (dst_port, QID) |
-| G8 | elasticsearch 2.1.1 (eql) | `\|re` | rendered with `regex~`, EQL's case-insensitive regex operator (Sigma regexes are case-sensitive); whole-value like G2 | Elasticsearch 9.5.4, case 02 (matches `ADM`, misses `sysadmin`) |
+| G3 | splunk 2.1.0, elasticsearch 2.1.1 (esql) | correlations | fixed time buckets (`bin _time span=`, `date_trunc`) instead of a sliding window. The Sigma spec tolerates this but asks the backend to warn; pySigma does not, so Rosettalog reports `PYSIGMA_CORRELATION_FIXED_WINDOW`: groups whose events straddle a bucket boundary are missed | Splunk 10.4.3 and Elasticsearch 9.5.4, `examples/rules-stateful` (192.0.2.21, ivan) | ES\|QL: [#182](https://github.com/SigmaHQ/pySigma-backend-elasticsearch/issues/182) (tolerated by the spec's [Compatibility](https://github.com/SigmaHQ/sigma-specification/blob/main/specification/sigma-correlation-rules-specification.md#compatibility) section; backends "should issue a warning"); Splunk: draft [upstream/g3-splunk-fixed-window.md](upstream/g3-splunk-fixed-window.md) |
+| G4 | elasticsearch 2.1.1 (eql) | `value_count` | `[...] by <field> with runs=N`: N events with the **same** value, not N distinct values | Elasticsearch 9.5.4, `examples/rules-stateful` (alerts on .31, misses .30) | [#218](https://github.com/SigmaHQ/pySigma-backend-elasticsearch/issues/218), fixed by [#219](https://github.com/SigmaHQ/pySigma-backend-elasticsearch/pull/219) after 2.1.1 (not released yet) |
+| G5 | elasticsearch 2.1.1 (eql) | `temporal_ordered` | `... by  with runs=2`: invalid EQL, rejected with a parse error | Elasticsearch 9.5.4, `examples/rules-stateful`, cases 07/08 | draft: [upstream/g5-g6-eql-temporal.md](upstream/g5-g6-eql-temporal.md) |
+| G6 | elasticsearch 2.1.1 (eql) | `temporal` | `sample by ...` without `maxspan`: the timespan is ignored | Elasticsearch 9.5.4, `examples/rules-stateful` (alerts on heidi, an hour apart) | draft: [upstream/g5-g6-eql-temporal.md](upstream/g5-g6-eql-temporal.md) |
+| G7 | elasticsearch 2.1.1 (eql) | numeric values | `field:22`; Elasticsearch rejects `:` on numeric fields ("consider using [==] instead") | Elasticsearch 9.5.4, `examples/rules` (dst_port, QID) | draft: [upstream/g7-eql-numeric-colon.md](upstream/g7-eql-numeric-colon.md) (related: #103, #109) |
+| G8 | elasticsearch 2.1.1 (eql) | `\|re` | rendered with `regex~`, EQL's case-insensitive regex operator (Sigma regexes are case-sensitive); whole-value like G2 | Elasticsearch 9.5.4, case 02 (matches `ADM`, misses `sysadmin`) | draft: [upstream/g8-eql-regex-case.md](upstream/g8-eql-regex-case.md) |
 
 Splunk 10.4.3 (local) and the Kusto emulator (`real-engines` workflow run 35982350005, x86-64)
 agreed with the Sigma rule on every single-event example; Splunk also on every correlation apart

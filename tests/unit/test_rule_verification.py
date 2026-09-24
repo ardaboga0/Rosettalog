@@ -132,6 +132,10 @@ def test_rule_examples(samples_path: Path, rules_path: Path) -> None:
         source, emulator = rv.run("source"), rv.run("emulator")
         assert source is not None
         assert emulator is not None
+        if source.error is not None:  # only for unresolvable references, and it is reported
+            assert any(f.code.startswith("RULE_REF_") for f in entry.source_findings), entry.name
+            assert rv.dropped_tests, entry.name
+            continue
         assert set(source.hits or []) == set(rv.expected or []), entry.name
         if rv.dropped_tests:  # the rule may only be broader, never miss an event
             assert set(emulator.hits or []) >= set(source.hits or []), entry.name

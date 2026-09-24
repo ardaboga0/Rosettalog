@@ -1,0 +1,27 @@
+title: 'Acme: rule using a cyclic building block'
+id: 57a5ad09-6fd8-5782-a361-448039e6d391
+name: acme_uses_cycle
+status: experimental
+description: 'Rosettalog: this rule is BROADER than the source QRadar rule (tests: test[2]); it may match
+  events the original does not. See qradar.dropped_tests.'
+logsource:
+  product: qradar
+detection:
+  sel_1:
+    EventName: login_ok
+  sel_2:
+    EventName: login_ok
+  sel_3:
+    username: dave
+  condition: sel_1 and (sel_2 and sel_3)
+qradar:
+  rule_id: '200105'
+  enabled: true
+  building_block: false
+  rule_type: event
+  broader_than_source: true
+  dropped_tests:
+  - test: test[2]
+    dropped: Reference to rule(s)/building block(s) 200003, which could not be resolved (see the RULE_REF_*
+      finding).
+    exclusion: false

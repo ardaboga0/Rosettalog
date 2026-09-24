@@ -1,0 +1,19 @@
+title: 'Acme: documentation-network event, then admin account, same source, 2 minutes'
+id: 279c3079-718f-5501-8456-06c31384e93c
+name: acme_test_net_then_admin
+status: experimental
+correlation:
+  type: temporal_ordered
+  rules:
+  - bb_acme_test_net
+  - bb_acme_admin_users
+  group-by:
+  - src_ip
+  timespan: 2m
+level: medium
+qradar:
+  rule_id: '200104'
+  enabled: true
+  building_block: false
+  rule_type: event
+  severity: 5

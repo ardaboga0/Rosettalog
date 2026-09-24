@@ -1,0 +1,2 @@
+sequence by src_ip with maxspan=5m 
+ [any where username like~ ("admin", "root")]  with runs=3

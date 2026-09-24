@@ -15,6 +15,7 @@ from rosettalog import __version__
 from rosettalog.errors import InputError
 from rosettalog.ir import Artifact, Finding, Provenance, Status, aggregate_status
 from rosettalog.ir.assumptions import Assumption, AssumptionSet, resolve_dependencies
+from rosettalog.ir.references import resolve_references
 from rosettalog.plugins import (
     Backend,
     RealEngineSession,
@@ -99,7 +100,7 @@ def load_artifacts(paths: Sequence[Path]) -> list[Artifact]:
         if count:
             artifact = artifact.model_copy(update={"id": f"{artifact.id}_{count + 1}"})
         unique.append(artifact)
-    return unique
+    return resolve_references(unique)
 
 
 def run(

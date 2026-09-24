@@ -44,6 +44,11 @@ KNOWN_GAPS: dict[tuple[str, str, str], tuple[set[str], set[str], str]] = {
     ("02-regex-find", "rl_rules_02_regex", "lucene"): (set(), {"e2"}, "G2"),
     ("02-regex-find", "rl_rules_02_regex", "esql"): (set(), {"e2"}, "G2"),
     ("02-regex-find", "rl_rules_02_regex", "eql"): ({"e3"}, {"e2"}, "G2 + G8"),
+    # Building blocks: "ROOT" (e3) matches the case-insensitive BB "admin, root" only in Sigma.
+    ("rules-bb", "bb_acme_admin_users", "lucene"): (set(), {"e3"}, "G1"),
+    ("rules-bb", "bb_acme_admin_users", "esql"): (set(), {"e3"}, "G1"),
+    ("rules-bb", "acme_admin_or_test_net", "lucene"): (set(), {"e3"}, "G1"),
+    ("rules-bb", "acme_admin_or_test_net", "esql"): (set(), {"e3"}, "G1"),
     # Correlations (hits are alerting groups). Splunk/ES|QL count in fixed buckets (bin _time,
     # date_trunc), so groups whose events straddle a bucket boundary are missed.
     ("rules-stateful", "tessivor_vpn_bruteforce", "esql"): (set(), {"SourceIp=192.0.2.21"}, "G3"),
@@ -66,11 +71,14 @@ KNOWN_ERRORS: dict[tuple[str, str, str], tuple[str, str]] = {
     # EQL temporal_ordered is rendered as "... by  with runs=2", which Elasticsearch rejects.
     ("rules-stateful", "tessivor_fail_then_success", "eql"): ("extraneous input 'with'", "G5"),
     ("07-sequence-gaps", "rl_rules_07_sequence", "eql"): ("extraneous input 'with'", "G5"),
+    ("rules-bb", "acme_test_net_then_admin", "eql"): ("extraneous input 'with'", "G5"),
     ("08-sequence-window", "rl_rules_08_sequence", "eql"): ("extraneous input 'with'", "G5"),
     # EQL compares numbers with ":" ("dst_port:22"), which Elasticsearch rejects for numeric
     # fields: "first argument of [:] must be [string] ... consider using [==] instead".
     ("rules", "tessivor_auth_failure_not_ssh", "eql"): ("must be [string]", "G7"),
     ("rules", "acme_blocked_host_event", "eql"): ("must be [string]", "G7"),
+    # "*": every rule of that sample set whose query compares the numeric port.
+    ("09-building-blocks", "*", "eql"): ("must be [string]", "G7"),
 }
 
 PAIRS = rule_sample_sets()
@@ -97,9 +105,12 @@ def test_pysigma_query_on_real_engine(language, samples, rules, real_session) ->
         assert emulator.hits is not None
         assert real is not None, "no real-engine run"
         key = (samples.parent.name, artifact.id, language)
+        wildcard = (samples.parent.name, "*", language)
+        known_error = KNOWN_ERRORS.get(key) or KNOWN_ERRORS.get(wildcard)
         if key in KNOWN_ERRORS:
-            assert real.error is not None, f"{artifact.id}: known error {KNOWN_ERRORS[key]} is gone"
-            assert KNOWN_ERRORS[key][0] in real.error, real.error
+            assert real.error is not None, f"{artifact.id}: known error {known_error} is gone"
+        if known_error is not None and real.error is not None:
+            assert known_error[0] in real.error, real.error
             continue
         assert real.error is None, f"{artifact.id}: {real.error}"
         extra = set(real.hits or []) - set(emulator.hits)

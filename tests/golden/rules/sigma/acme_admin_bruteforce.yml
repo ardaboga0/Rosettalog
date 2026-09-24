@@ -1,0 +1,20 @@
+title: 'Acme: at least 3 admin-account events from one source in 5 minutes'
+id: df902d24-6389-579c-9e1a-05dcf3bdc810
+name: acme_admin_bruteforce
+status: experimental
+correlation:
+  type: event_count
+  rules:
+  - bb_acme_admin_users
+  group-by:
+  - src_ip
+  timespan: 5m
+  condition:
+    gte: 3
+level: high
+qradar:
+  rule_id: '200103'
+  enabled: true
+  building_block: false
+  rule_type: event
+  severity: 7
