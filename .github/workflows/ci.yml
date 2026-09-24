@@ -86,7 +86,7 @@ jobs:
             --samples examples/acme_firewall/samples.yaml --require-ground-truth -o out
           grep -q "Unconfirmed global assumptions" out/report.md
           grep -q "^| X02 " out/report.md
-          ls out/*/xsiam/*.model.xif
+          ls out/xsiam/*/*.model.xif
           venv/bin/rosettalog convert examples/rules-stateful/stateful_rules.ir.json --to sigma \
             -O sigma.pysigma_targets=splunk,esql --samples examples/rules-stateful/samples.yaml -o out-rules
           grep -q "^| R0" out-rules/report.md
