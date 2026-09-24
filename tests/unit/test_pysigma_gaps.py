@@ -120,3 +120,12 @@ def test_g7_eql_compares_numbers_with_colon() -> None:
 
 def test_g8_eql_regex_is_case_insensitive_operator() -> None:
     assert convert("eql", "f|re: 'adm'") == 'any where f regex~ "adm"'
+
+
+@pytest.mark.parametrize("name", ["xql", "xsiam", "cortexxdr"])
+def test_xql_target_is_a_documented_gap(name: str) -> None:
+    from rosettalog.backends.sigma.pysigma import parse_targets
+    from rosettalog.errors import InputError
+
+    with pytest.raises(InputError, match=r"pysigma<1\.0\.0"):
+        parse_targets(f"splunk,{name}")

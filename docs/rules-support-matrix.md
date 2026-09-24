@@ -134,6 +134,24 @@ encoding) are not assumptions: the rule-export parser waits for them.
 `-O sigma.pysigma_targets=splunk,kusto,lucene,esql`. Conversion runs without a processing
 pipeline (`PYSIGMA_CONVERTED`); add your data model's pipeline for production.
 
+### Cortex XSIAM / XDR (XQL): no usable pySigma backend
+
+Rosettalog does not write its own XQL rule renderer, and no pySigma XQL backend can currently
+be pinned next to pySigma 1.5.1. `-O sigma.pysigma_targets=xql` therefore fails with this
+explanation.
+
+| Candidate | Version / license | Status |
+|---|---|---|
+| [pySigma-backend-cortexxdr](https://github.com/7RedViolin/pySigma-backend-cortexxdr) | 0.1.5 (2026-03-30), MIT | Requires `pysigma>=0.11.3,<1.0.0`; upstream: "Not compatible with v1.0.0" ([issue #20](https://github.com/7RedViolin/pySigma-backend-cortexxdr/issues/20), open, "Pipeline not compatible with latest pySigma version"). No correlation support (no `correlation_methods`). Regexes use `~=`; queries start with `config case_sensitive = false`. |
+| [gocortexio/sigma2xsiam](https://github.com/gocortexio/sigma2xsiam) | unreleased (not on PyPI), MIT | Unpinned pySigma; last pushed 2025-10; mixes the backend with a rule collection. Not a maintained package. |
+
+Two options until then:
+- Convert XSIAM detections by hand from the generated Sigma rules.
+- Run pySigma-backend-cortexxdr in a separate environment with pySigma 0.11. Rosettalog does not
+  validate that output, so check it on your tenant.
+
+This is a gap in the downstream tooling, recorded here rather than worked around.
+
 ### Correlation support (pinned versions, checked on real engines)
 
 | Backend | event_count | value_count | temporal | temporal_ordered |
